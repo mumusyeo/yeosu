@@ -1,6 +1,6 @@
 import { escapeHtml as e, safeUrl, pollResult, resultLabel, validateCandidate, validateMessage, newId, normalizeName, validateNickname } from './domain.js';
 import { DemoRepository, SupabaseRepository } from './repository.js';
-import { accountDetails, renderBudget, validateExpense } from './expenses.js';
+import { accountDetails, renderBudget, settles, validateExpense } from './expenses.js';
 import { createSeed } from './seed.js';
 import { initSlideshow } from './slideshow.js';
 
@@ -14,7 +14,7 @@ const anonymousForms = ['schedule-edit','schedule-add','lodging'];
 let toastTimer,refreshTimer,expiryTimer,lastNickname='';
 try{lastNickname=localStorage.getItem('namjjok-nickname')||'';}catch{}
 if(new URLSearchParams(location.hash.slice(1)).has('invite'))history.replaceState(null,'',location.pathname+location.search+'#schedule');
-function nicknameField(value=lastNickname){return field('닉네임','nickname',value,'text','required maxlength="40" autocomplete="nickname"')+'<p class="muted">같은 닉네임을 사용하면 투표와 정산 내역을 함께 모아 볼 수 있어요.</p>';}
+function nicknameField(value=lastNickname,hint='같은 닉네임을 사용하면 투표와 정산 내역을 함께 모아 볼 수 있어요.'){return field('닉네임','nickname',value,'text','required maxlength="40" autocomplete="nickname"')+(hint?`<p class="muted">${hint}</p>`:'');}
 function rememberNickname(value){lastNickname=validateNickname(value);try{localStorage.setItem('namjjok-nickname',lastNickname);}catch{}}
 function toast(message) {$('#toast').textContent=message;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),4000);}
 function lockUi(value) {
@@ -67,7 +67,7 @@ function render() {
   else if(state.section==='votes') $('#main').innerHTML=state.pollId&&pollById(state.pollId)?renderPoll(pollById(state.pollId)):renderVotes();
   else if(state.section==='lodgings') $('#main').innerHTML=renderLodgings();
   else if(state.section==='guestbook') $('#main').innerHTML=canEdit()?renderGuestbook():'<div class="notice">공유 데이터 설정 후 방명록을 사용할 수 있어요.</div>';
-  else if(state.section==='budget') $('#main').innerHTML=canEdit()?renderBudget(state.data,me()):'<div class="notice">공유 데이터 설정 후 정산 내역을 함께 등록할 수 있어요.</div>';
+  else if(state.section==='budget') $('#main').innerHTML=canEdit()?renderBudget(state.data,[me()].find(p=>p&&settles(p))):'<div class="notice">공유 데이터 설정 후 정산 내역을 함께 등록할 수 있어요.</div>';
   else {state.section='schedule';$('#main').innerHTML=renderSchedule();renderNav();}
   if(state.busy)lockUi(true);
 }
@@ -96,7 +96,7 @@ function renderLodgings() {
   return heading('A PLACE TO REST','숙소','밤에는 느긋하게, 내일의 여행을 준비해요.')+`<div class="lodging-grid">${state.data.lodgings.map((l,i)=>`<article class="card lodging-card"><div class="lodging-visual ${i?'suncheon':''}" aria-hidden="true"><span>${e(l.city)}</span><small>${i?'AMONG THE REEDS':'BY THE SEA'}</small></div><span class="section-kicker">NIGHT 0${i+1} · ${shortDate(l.check_in)} → ${shortDate(l.check_out)}</span><h3>${e(l.name)}</h3><span class="badge ${l.verified?'':'pending'}">${l.verified?'숙소 정보 확인됨':'예약 및 상세 정보 확인 필요'}</span><p>${e(l.notes)}</p>${link(l.url,i?'네이버 지도에서 보기':'Airbnb에서 보기','external-link')}${canEdit()?`<div style="margin-top:18px">${button('숙소 정보 수정','lodging-edit',l.id,'small')}</div>`:''}</article>`).join('')}</div>`;
 }
 function renderGuestbook() {
-  return heading('LEAVE A LITTLE NOTE','여행 전, 한마디','기대하는 순간, 가져갈 간식, 하고 싶은 이야기. 편하게 남겨요.')+`<form class="card guest-form" data-form="guestbook-create"><div class="guest-top"><span class="avatar">${e((state.guestNicknameDraft||'?').slice(0,1))}</span><strong>${e(state.guestNicknameDraft||'닉네임을 입력해 주세요.')}</strong></div>${nicknameField(state.guestNicknameDraft??'')}<label class="field" for="guest-content">친구들에게 남길 메시지<textarea id="guest-content" name="content" maxlength="1000" required placeholder="이번 여행에서 가장 기대되는 건…">${e(state.guestDraft)}</textarea></label><p class="form-error" role="alert"></p><div class="form-footer"><span>최대 1,000자 · 10초에 한 번</span><button class="primary" type="submit">메시지 남기기</button></div></form><div class="guest-list">${state.entries.map(entry=>{
+  return heading('LEAVE A LITTLE NOTE','여행 전, 한마디','기대하는 순간, 가져갈 간식, 하고 싶은 이야기. 편하게 남겨요.')+`<form class="card guest-form" data-form="guestbook-create"><div class="guest-top"><span class="avatar">${e((state.guestNicknameDraft||'?').slice(0,1))}</span><strong>${e(state.guestNicknameDraft||'닉네임을 입력해 주세요.')}</strong></div>${nicknameField(state.guestNicknameDraft??'','')}<label class="field" for="guest-content">친구들에게 남길 메시지<textarea id="guest-content" name="content" maxlength="1000" required placeholder="이번 여행에서 가장 기대되는 건…">${e(state.guestDraft)}</textarea></label><p class="form-error" role="alert"></p><div class="form-footer"><span>최대 1,000자 · 10초에 한 번</span><button class="primary" type="submit">메시지 남기기</button></div></form><div class="guest-list">${state.entries.map(entry=>{
     const person=state.data.participants.find(p=>p.id===entry.participant_id);
     return `<article class="card"><div class="guest-top"><span class="avatar">${e((person?.name||'?').slice(0,1))}</span><div><strong>${e(person?.name||'참여자')}</strong><time datetime="${e(entry.created_at)}">${fmtDate(entry.created_at)}${entry.updated_at!==entry.created_at?' · 수정됨':''}</time></div></div><p class="guest-message">${e(entry.content)}</p><div class="guest-controls">${canEdit()?button('수정','guest-edit',entry.id,'small quiet'):''}${canEdit()?button('삭제','guest-delete',entry.id,'small quiet danger'):''}</div></article>`;
   }).join('')||'<div class="empty"><strong>우리 여행의 첫 문장.</strong>첫 번째 메시지를 남겨 주세요.</div>'}</div>${state.entries.length>=state.limit?`<div style="margin-top:20px">${button('메시지 더 보기','guest-more')}</div>`:''}`;
@@ -108,7 +108,7 @@ function expenseForm(expense=null) {
   showForm(expense?'내 결제 내역 수정':'내 결제 내역 등록',expense?'expense-edit':'expense-create',
     `<p class="dialog-description">${expense?'결제자: '+e(state.data.participants.find(p=>p.id===expense.paid_by)?.name||'참여자'):'입력한 닉네임을 결제자로 기록해요.'} · 원 단위로 균등 배분해요.</p><div class="form-row">${field('날짜','expense_date',current.slice(0,10),'date','required')}${field('시간','expense_time',current.slice(11,16),'time','required')}</div>`+
     `<div class="form-row">${field('은행명 (선택)','bank_name',account.bank_name,'text','maxlength="40" placeholder="예: 카카오뱅크"')}${field('계좌번호 (선택)','account_number',account.account_number,'text','maxlength="100" placeholder="예: 3333-00-1234567"')}</div>`+field('항목','item',expense?.item||'','text','required maxlength="100"')+field('금액 (원)','amount',expense?.amount||'','number','required min="1" max="2147483647" step="1"')+
-    `<fieldset class="split-fieldset"><legend>정산 대상자</legend><div class="split-modes"><label><input type="radio" name="split_mode" value="all" ${expense?.split_mode!=='some'?'checked':''}> 전부</label><label><input type="radio" name="split_mode" value="some" ${expense?.split_mode==='some'?'checked':''}> 일부</label></div><div id="split-people" class="split-people" ${expense?.split_mode==='some'?'':'hidden'}>${state.data.participants.filter(p=>p.active).map(p=>`<label><input type="checkbox" name="participant_ids" value="${e(p.id)}" ${ids.includes(p.id)?'checked':''}>${e(p.name)}</label>`).join('')}</div><p class="muted">‘전부’는 저장할 때 참여 중인 친구 전원이에요.</p></fieldset>`,expense?.id||'','내역 저장');
+    `<fieldset class="split-fieldset"><legend>정산 대상자</legend><div class="split-modes"><label><input type="radio" name="split_mode" value="all" ${expense?.split_mode!=='some'?'checked':''}> 전부</label><label><input type="radio" name="split_mode" value="some" ${expense?.split_mode==='some'?'checked':''}> 일부</label></div><div id="split-people" class="split-people" ${expense?.split_mode==='some'?'':'hidden'}>${state.data.participants.filter(settles).map(p=>`<label><input type="checkbox" name="participant_ids" value="${e(p.id)}" ${ids.includes(p.id)?'checked':''}>${e(p.name)}</label>`).join('')}</div><p class="muted">‘전부’는 저장할 때 정산 멤버 전원이에요.</p></fieldset>`,expense?.id||'','내역 저장');
   $('#dialog form').dataset.requestId=newId();
 }
 
@@ -142,7 +142,9 @@ async function write(action,payload) {
   if(!canEdit())throw new Error('닉네임을 입력해 주세요.');
   if(!navigator.onLine&&!state.repo.demo)throw new Error('오프라인이에요. 연결 후 저장해 주세요.');
   if(payload.nickname===undefined){const result=await state.repo.mutate(action,payload);await refresh();return result;}
-  const nickname=validateNickname(payload.nickname);const result=await state.repo.mutate(action,{...payload,nickname});rememberNickname(nickname);await refresh();return result;
+  const nickname=validateNickname(payload.nickname);const result=await state.repo.mutate(action,{...payload,nickname});
+  // A guestbook nickname stays in the guestbook; it is not carried into votes or settlement.
+  if(!action.startsWith('guestbook'))rememberNickname(nickname);await refresh();return result;
 }
 async function action(name,id,element) {
   if(name==='dialog-close'){$('#dialog').close();return;}

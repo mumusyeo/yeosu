@@ -37,8 +37,8 @@ export function createSeed() {
   });
   return {
     trip: { id: TRIP_ID, title: '야앙! 우리가 간다!', start_date: '2026-11-06', end_date: '2026-11-08', timezone: 'Asia/Seoul' },
-    schema_version:4, expense_account_numbers:true, expense_bank_names:true, schedule, polls, candidates, votes: [], guestbook: [], expenses:[], expense_splits:[],
-    participants: Array.from({length:8}, (_, i) => ({ id: uuid('f',i+1), trip_id: TRIP_ID, name: ['밀로','임호','소연','레나','로건','유미','희우','희지'][i], active: true, is_placeholder:false })),
+    schema_version:5, expense_account_numbers:true, expense_bank_names:true, schedule, polls, candidates, votes: [], guestbook: [], expenses:[], expense_splits:[],
+    participants: Array.from({length:8}, (_, i) => ({ id: uuid('f',i+1), trip_id: TRIP_ID, name: ['밀로','임호','소연','레나','로건','유미','희우','희지'][i], active: true, is_placeholder:false, in_settlement:true })),
     lodgings: [
       { id: uuid('e',1), trip_id: TRIP_ID, city:'여수', name:'여기요 독채', check_in:'2026-11-06', check_out:'2026-11-07', url:'https://www.airbnb.co.kr/rooms/959847712327131849', notes:'전남광주 여수시, 돌산읍 송시길 19 · 체크인 15:00 · 체크아웃 11:00 · 예약 상태 확인 필요', verified:false },
       { id: uuid('e',2), trip_id: TRIP_ID, city:'순천', name:'온녘', check_in:'2026-11-07', check_out:'2026-11-08', url:'https://map.naver.com/p/entry/place/2048015818', notes:'전남광주 광양시 봉강면 지곡길 45 · 체크인 15:00 · 체크아웃 12:00 · 예약 및 바비큐·불멍 가능 여부 확인 필요', verified:false },

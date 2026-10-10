@@ -11,6 +11,11 @@ test('all captures active roster, some rejects empty/foreign targets and invalid
   assert.throws(()=>validateExpense({...p,split_mode:'some',participant_ids:[]},people),/한 명/);assert.throws(()=>validateExpense({...p,split_mode:'some',participant_ids:['c']},people),/참여 중/);
   for(const amount of [-1,0,1.5,NaN,Infinity,2147483648])assert.throws(()=>validateExpense({...p,amount},people));
 });
+test('nicknames outside the settlement members are not split targets or counted',()=>{
+  const people=[{id:'a',name:'밀로',active:true,in_settlement:true},{id:'g',name:'방명록 손님',active:true,in_settlement:false}],p={item:'점심',amount:1000,occurred_at:'2026-11-06T12:00:00+09:00',split_mode:'all'};
+  assert.deepEqual(validateExpense(p,people).participant_ids,['a']);assert.throws(()=>validateExpense({...p,split_mode:'some',participant_ids:['g']},people),/참여 중/);
+  const html=renderBudget({expenses:[],expense_splits:[],participants:people},null);assert(html.includes('1명'));assert(!html.includes('방명록 손님'));
+});
 test('payer may be excluded; balances and transfers sum exactly; deletion excluded',()=>{
   const expenses=[{id:'x',paid_by:'a',amount:1001},{id:'y',paid_by:'b',amount:600}],splits=[...allocate(1001,['b','c']).map(s=>({...s,expense_id:'x'})),...allocate(600,['a','b','c']).map(s=>({...s,expense_id:'y'}))],people=['a','b','c'].map(id=>({id,name:id,active:true}));
   const r=balanceSheet(expenses,splits,people);assert.equal(r.total,1601);assert.equal(r.rows.reduce((n,p)=>n+p.net,0),0);assert.deepEqual(r.rows.map(p=>p.net),[801,-101,-700]);

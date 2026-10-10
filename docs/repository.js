@@ -5,8 +5,9 @@ import { validateExpense, allocate } from './expenses.js';
 const DEMO_KEY = 'namjjok-demo-v1';
 const clone = value => structuredClone(value);
 function upgradeDemo(data) {
-  if(data.schema_version===4)return data;
+  if(data.schema_version===5)return data;
   const seed=createSeed();
+  if(data.schema_version!==4){
   data.expenses ||= [];data.expense_splits ||= [];
   data.participants.forEach((p,i)=>{if(p.name==='주최자'||p.name===`친구 ${i}`)p.name=`친구 ${i+1}`;delete p.role;if(p.is_placeholder===undefined)p.is_placeholder=/^친구 [1-8]$/.test(p.name);});
   data.polls.forEach(p=>{delete p.status;delete p.deadline;delete p.confirmed_candidate_id;delete p.decision_reason;});
@@ -15,7 +16,11 @@ function upgradeDemo(data) {
   for(const index of [8,10,15]){const row=data.schedule.find(s=>s.id===seed.schedule[index].id);if(row)row.title=seed.schedule[index].title;}
   const lodging=data.lodgings.find(l=>l.id===seed.lodgings[1].id);if(lodging)Object.assign(lodging,{name:seed.lodgings[1].name,notes:seed.lodgings[1].notes});
   const stay=data.schedule.find(s=>s.id===seed.schedule[16].id);if(stay)stay.description=seed.schedule[16].description;
-  data.trip.title=seed.trip.title;delete data.me;delete data.invitations;data.schema_version=4;return data;
+  data.trip.title=seed.trip.title;delete data.me;delete data.invitations;
+  }
+  // Settlement members: the initial friends and anyone who already paid.
+  data.participants.forEach(p=>{p.in_settlement=seed.participants.some(s=>s.id===p.id)||data.expenses.some(x=>x.paid_by===p.id&&!x.deleted_at);});
+  data.schema_version=5;return data;
 }
 export class DemoRepository {
   constructor() {
@@ -39,7 +44,7 @@ export class DemoRepository {
       if(!knownActions.includes(action))throw new Error('지원하지 않는 작업이에요.');
       let me=data.participants.find(p=>normalizeName(p.name)===normalizeName(nickname));
       if(!anonymous){
-        if(!me){me=data.participants.find(p=>p.is_placeholder);if(me){me.name=nickname;me.is_placeholder=false;}else{me={id:newId(),trip_id:TRIP_ID,name:nickname,active:true,is_placeholder:false};data.participants.push(me);}}
+        if(!me){me=data.participants.find(p=>p.is_placeholder);if(me){me.name=nickname;me.is_placeholder=false;}else{me={id:newId(),trip_id:TRIP_ID,name:nickname,active:true,is_placeholder:false,in_settlement:false};data.participants.push(me);}}
         me.active=true;me.is_placeholder=false;
       }
       const pollFor = () => { const p = data.polls.find(p => p.id === payload.poll_id); if (!p) throw new Error('투표를 찾을 수 없어요.'); return p; };
@@ -85,10 +90,12 @@ export class DemoRepository {
         const name=validateNickname(payload.name);if(data.participants.some(p=>p.id!==person.id&&normalizeName(p.name)===normalizeName(name)))throw new Error('이미 사용하는 닉네임이에요.');person.name=name;person.is_placeholder=false;
       } else if (action === 'participant_add') {
         if(!payload.name.trim() || payload.name.length>40) throw new Error('이름은 1~40자예요.');
-        const name=validateNickname(payload.name);if(!data.participants.some(p=>normalizeName(p.name)===normalizeName(name))){const slot=data.participants.find(p=>p.is_placeholder);if(slot){slot.name=name;slot.is_placeholder=false;}else data.participants.push({id:newId(),trip_id:TRIP_ID,name,active:true,is_placeholder:false});}
+        const name=validateNickname(payload.name);if(!data.participants.some(p=>normalizeName(p.name)===normalizeName(name))){const slot=data.participants.find(p=>p.is_placeholder);if(slot){slot.name=name;slot.is_placeholder=false;}else data.participants.push({id:newId(),trip_id:TRIP_ID,name,active:true,is_placeholder:false,in_settlement:false});}
       } else if (['expense_create','expense_edit'].includes(action)) {
         if(action==='expense_create'&&data.expenses.some(x=>x.request_id===payload.request_id&&x.paid_by===me.id))return null;
         if(action==='expense_create'&&data.expenses.some(x=>x.request_id===payload.request_id))throw new Error('다른 결제 내역의 요청 식별자예요.');
+        // Only paying for something adds a nickname to the settlement members.
+        if(action==='expense_create')me.in_settlement=true;
         const input=validateExpense(payload,data.participants);
         let expense;
         if(action==='expense_edit'){

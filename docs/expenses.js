@@ -1,5 +1,7 @@
 import { escapeHtml as e } from './domain.js';
 
+// Settlement members are the initial friends plus anyone who registered a payment; older data has no flag.
+export const settles = p => p.active&&p.in_settlement!==false;
 export function validateExpense(input, participants) {
   const item=String(input.item||'').trim(),amount=Number(input.amount);
   if(!item || item.length>100)throw new Error('항목은 1~100자로 입력해 주세요.');
@@ -12,7 +14,7 @@ export function validateExpense(input, participants) {
   if(!occurred_at||!Number.isFinite(Date.parse(occurred_at)))throw new Error('날짜와 시간을 입력해 주세요.');
   const mode=input.split_mode;
   if(!['all','some'].includes(mode))throw new Error('정산 대상자를 선택해 주세요.');
-  const active=new Set(participants.filter(p=>p.active).map(p=>p.id));
+  const active=new Set(participants.filter(settles).map(p=>p.id));
   const ids=mode==='all'?[...active]:[...new Set(input.participant_ids||[])];
   if(!ids.length)throw new Error('정산 대상자는 한 명 이상 선택해 주세요.');
   if(ids.some(id=>!active.has(id)))throw new Error('여행에 참여 중인 대상자만 선택할 수 있어요.');
@@ -25,7 +27,7 @@ export function allocate(amount,ids) {
 }
 export function balanceSheet(expenses,splits,participants) {
   const activeExpenses=expenses.filter(x=>!x.deleted_at),byId=new Map(activeExpenses.map(x=>[x.id,x]));
-  const rows=participants.map(p=>({id:p.id,name:p.name,active:p.active,paid:0,share:0,net:0}));
+  const rows=participants.map(p=>({id:p.id,name:p.name,active:settles(p),paid:0,share:0,net:0}));
   const people=new Map(rows.map(p=>[p.id,p]));
   for(const ex of activeExpenses){const payer=people.get(ex.paid_by);if(payer)payer.paid+=Number(ex.amount);}
   for(const split of splits){if(byId.has(split.expense_id)){const person=people.get(split.participant_id);if(person)person.share+=Number(split.amount);}}
@@ -51,7 +53,7 @@ export function renderBudget(data,me) {
   const name=id=>data.participants.find(p=>p.id===id)?.name||'참여자';
   const accounts=[...new Map(expenses.map(ex=>({...accountDetails(ex),paid_by:ex.paid_by})).filter(a=>a.account_number).map(a=>[JSON.stringify([a.paid_by,a.bank_name,a.account_number]),a])).values()];
   return `<div class="section-heading"><div><span class="section-kicker">SPLIT FAIRLY, TRAVEL HAPPILY</span><h2>예산 · 정산표</h2><p>내가 결제한 내역을 등록하고, 함께 나눌 친구들을 선택해요.</p></div>${btn('+ 내역 등록','expense-add','','primary')}</div>
-    <div class="budget-stats"><div class="card"><span>등록된 총 지출</span><strong>${won(summary.total)}</strong><small>${summary.count}개 내역</small></div><div class="card"><span>${me?'내가 결제한 금액':'함께 나눌 친구들'}</span><strong>${me?won(personal?.paid||0):summary.rows.filter(p=>p.active).length+'명'}</strong><small>${me?e(me.name)+' 기준':'닉네임은 등록할 때 입력해요.'}</small></div><div class="card"><span>${me?'내 정산 잔액':'등록된 결제 내역'}</span><strong>${me?won(Math.abs(personal?.net||0)):summary.count+'건'}</strong><small>${me?(personal?.net>0?'받을 금액':personal?.net<0?'보낼 금액':'정산 균형'):'아래에서 개인별 정산을 확인하세요.'}</small></div></div>
+    <div class="budget-stats"><div class="card"><span>등록된 총 지출</span><strong>${won(summary.total)}</strong><small>${summary.count}개 내역</small></div><div class="card"><span>${me?'내가 결제한 금액':'함께 나눌 친구들'}</span><strong>${me?won(personal?.paid||0):data.participants.filter(settles).length+'명'}</strong><small>${me?e(me.name)+' 기준':'닉네임은 등록할 때 입력해요.'}</small></div><div class="card"><span>${me?'내 정산 잔액':'등록된 결제 내역'}</span><strong>${me?won(Math.abs(personal?.net||0)):summary.count+'건'}</strong><small>${me?(personal?.net>0?'받을 금액':personal?.net<0?'보낼 금액':'정산 균형'):'아래에서 개인별 정산을 확인하세요.'}</small></div></div>
     <h3 class="budget-heading">결제 내역 <small>날짜·시간이 빠른 순</small></h3><div class="expense-list">${expenses.map(ex=>{
       const splits=data.expense_splits.filter(s=>s.expense_id===ex.id),own=true;
       return `<article class="card expense-card"><div class="expense-top"><div><span class="section-kicker">${fmt(ex.occurred_at)} · ${e(name(ex.paid_by))} 결제</span><h4>${e(ex.item)}</h4></div><strong>${won(ex.amount)}</strong></div><div class="split-details"><span class="badge">${ex.split_mode==='all'?'전부':'일부'} · ${splits.length}명</span><p>${splits.map(s=>`${e(name(s.participant_id))} ${won(s.amount)}`).join(' · ')}</p></div>${own?`<div class="guest-controls">${btn('수정','expense-edit',ex.id)}${btn('삭제','expense-delete',ex.id,'small quiet danger')}</div>`:''}</article>`;

@@ -134,7 +134,7 @@
     });
     return {
       trip: { id: TRIP_ID, title: "\uC57C\uC559! \uC6B0\uB9AC\uAC00 \uAC04\uB2E4!", start_date: "2026-11-06", end_date: "2026-11-08", timezone: "Asia/Seoul" },
-      schema_version: 4,
+      schema_version: 5,
       expense_account_numbers: true,
       expense_bank_names: true,
       schedule,
@@ -144,7 +144,7 @@
       guestbook: [],
       expenses: [],
       expense_splits: [],
-      participants: Array.from({ length: 8 }, (_, i) => ({ id: uuid("f", i + 1), trip_id: TRIP_ID, name: ["\uBC00\uB85C", "\uC784\uD638", "\uC18C\uC5F0", "\uB808\uB098", "\uB85C\uAC74", "\uC720\uBBF8", "\uD76C\uC6B0", "\uD76C\uC9C0"][i], active: true, is_placeholder: false })),
+      participants: Array.from({ length: 8 }, (_, i) => ({ id: uuid("f", i + 1), trip_id: TRIP_ID, name: ["\uBC00\uB85C", "\uC784\uD638", "\uC18C\uC5F0", "\uB808\uB098", "\uB85C\uAC74", "\uC720\uBBF8", "\uD76C\uC6B0", "\uD76C\uC9C0"][i], active: true, is_placeholder: false, in_settlement: true })),
       lodgings: [
         { id: uuid("e", 1), trip_id: TRIP_ID, city: "\uC5EC\uC218", name: "\uC5EC\uAE30\uC694 \uB3C5\uCC44", check_in: "2026-11-06", check_out: "2026-11-07", url: "https://www.airbnb.co.kr/rooms/959847712327131849", notes: "\uC804\uB0A8\uAD11\uC8FC \uC5EC\uC218\uC2DC, \uB3CC\uC0B0\uC74D \uC1A1\uC2DC\uAE38 19 \xB7 \uCCB4\uD06C\uC778 15:00 \xB7 \uCCB4\uD06C\uC544\uC6C3 11:00 \xB7 \uC608\uC57D \uC0C1\uD0DC \uD655\uC778 \uD544\uC694", verified: false },
         { id: uuid("e", 2), trip_id: TRIP_ID, city: "\uC21C\uCC9C", name: "\uC628\uB158", check_in: "2026-11-07", check_out: "2026-11-08", url: "https://map.naver.com/p/entry/place/2048015818", notes: "\uC804\uB0A8\uAD11\uC8FC \uAD11\uC591\uC2DC \uBD09\uAC15\uBA74 \uC9C0\uACE1\uAE38 45 \xB7 \uCCB4\uD06C\uC778 15:00 \xB7 \uCCB4\uD06C\uC544\uC6C3 12:00 \xB7 \uC608\uC57D \uBC0F \uBC14\uBE44\uD050\xB7\uBD88\uBA4D \uAC00\uB2A5 \uC5EC\uBD80 \uD655\uC778 \uD544\uC694", verified: false }
@@ -154,6 +154,7 @@
   }
 
   // docs/expenses.js
+  var settles = (p) => p.active && p.in_settlement !== false;
   function validateExpense(input, participants) {
     const item = String(input.item || "").trim(), amount = Number(input.amount);
     if (!item || item.length > 100) throw new Error("\uD56D\uBAA9\uC740 1~100\uC790\uB85C \uC785\uB825\uD574 \uC8FC\uC138\uC694.");
@@ -166,7 +167,7 @@
     if (!occurred_at || !Number.isFinite(Date.parse(occurred_at))) throw new Error("\uB0A0\uC9DC\uC640 \uC2DC\uAC04\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694.");
     const mode = input.split_mode;
     if (!["all", "some"].includes(mode)) throw new Error("\uC815\uC0B0 \uB300\uC0C1\uC790\uB97C \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.");
-    const active = new Set(participants.filter((p) => p.active).map((p) => p.id));
+    const active = new Set(participants.filter(settles).map((p) => p.id));
     const ids = mode === "all" ? [...active] : [...new Set(input.participant_ids || [])];
     if (!ids.length) throw new Error("\uC815\uC0B0 \uB300\uC0C1\uC790\uB294 \uD55C \uBA85 \uC774\uC0C1 \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.");
     if (ids.some((id) => !active.has(id))) throw new Error("\uC5EC\uD589\uC5D0 \uCC38\uC5EC \uC911\uC778 \uB300\uC0C1\uC790\uB9CC \uC120\uD0DD\uD560 \uC218 \uC788\uC5B4\uC694.");
@@ -179,7 +180,7 @@
   }
   function balanceSheet(expenses, splits, participants) {
     const activeExpenses = expenses.filter((x) => !x.deleted_at), byId = new Map(activeExpenses.map((x) => [x.id, x]));
-    const rows2 = participants.map((p) => ({ id: p.id, name: p.name, active: p.active, paid: 0, share: 0, net: 0 }));
+    const rows2 = participants.map((p) => ({ id: p.id, name: p.name, active: settles(p), paid: 0, share: 0, net: 0 }));
     const people = new Map(rows2.map((p) => [p.id, p]));
     for (const ex of activeExpenses) {
       const payer = people.get(ex.paid_by);
@@ -221,7 +222,7 @@
     const name = (id) => data.participants.find((p) => p.id === id)?.name || "\uCC38\uC5EC\uC790";
     const accounts = [...new Map(expenses.map((ex) => ({ ...accountDetails(ex), paid_by: ex.paid_by })).filter((a) => a.account_number).map((a) => [JSON.stringify([a.paid_by, a.bank_name, a.account_number]), a])).values()];
     return `<div class="section-heading"><div><span class="section-kicker">SPLIT FAIRLY, TRAVEL HAPPILY</span><h2>\uC608\uC0B0 \xB7 \uC815\uC0B0\uD45C</h2><p>\uB0B4\uAC00 \uACB0\uC81C\uD55C \uB0B4\uC5ED\uC744 \uB4F1\uB85D\uD558\uACE0, \uD568\uAED8 \uB098\uB20C \uCE5C\uAD6C\uB4E4\uC744 \uC120\uD0DD\uD574\uC694.</p></div>${btn("+ \uB0B4\uC5ED \uB4F1\uB85D", "expense-add", "", "primary")}</div>
-    <div class="budget-stats"><div class="card"><span>\uB4F1\uB85D\uB41C \uCD1D \uC9C0\uCD9C</span><strong>${won(summary.total)}</strong><small>${summary.count}\uAC1C \uB0B4\uC5ED</small></div><div class="card"><span>${me2 ? "\uB0B4\uAC00 \uACB0\uC81C\uD55C \uAE08\uC561" : "\uD568\uAED8 \uB098\uB20C \uCE5C\uAD6C\uB4E4"}</span><strong>${me2 ? won(personal?.paid || 0) : summary.rows.filter((p) => p.active).length + "\uBA85"}</strong><small>${me2 ? escapeHtml(me2.name) + " \uAE30\uC900" : "\uB2C9\uB124\uC784\uC740 \uB4F1\uB85D\uD560 \uB54C \uC785\uB825\uD574\uC694."}</small></div><div class="card"><span>${me2 ? "\uB0B4 \uC815\uC0B0 \uC794\uC561" : "\uB4F1\uB85D\uB41C \uACB0\uC81C \uB0B4\uC5ED"}</span><strong>${me2 ? won(Math.abs(personal?.net || 0)) : summary.count + "\uAC74"}</strong><small>${me2 ? personal?.net > 0 ? "\uBC1B\uC744 \uAE08\uC561" : personal?.net < 0 ? "\uBCF4\uB0BC \uAE08\uC561" : "\uC815\uC0B0 \uADE0\uD615" : "\uC544\uB798\uC5D0\uC11C \uAC1C\uC778\uBCC4 \uC815\uC0B0\uC744 \uD655\uC778\uD558\uC138\uC694."}</small></div></div>
+    <div class="budget-stats"><div class="card"><span>\uB4F1\uB85D\uB41C \uCD1D \uC9C0\uCD9C</span><strong>${won(summary.total)}</strong><small>${summary.count}\uAC1C \uB0B4\uC5ED</small></div><div class="card"><span>${me2 ? "\uB0B4\uAC00 \uACB0\uC81C\uD55C \uAE08\uC561" : "\uD568\uAED8 \uB098\uB20C \uCE5C\uAD6C\uB4E4"}</span><strong>${me2 ? won(personal?.paid || 0) : data.participants.filter(settles).length + "\uBA85"}</strong><small>${me2 ? escapeHtml(me2.name) + " \uAE30\uC900" : "\uB2C9\uB124\uC784\uC740 \uB4F1\uB85D\uD560 \uB54C \uC785\uB825\uD574\uC694."}</small></div><div class="card"><span>${me2 ? "\uB0B4 \uC815\uC0B0 \uC794\uC561" : "\uB4F1\uB85D\uB41C \uACB0\uC81C \uB0B4\uC5ED"}</span><strong>${me2 ? won(Math.abs(personal?.net || 0)) : summary.count + "\uAC74"}</strong><small>${me2 ? personal?.net > 0 ? "\uBC1B\uC744 \uAE08\uC561" : personal?.net < 0 ? "\uBCF4\uB0BC \uAE08\uC561" : "\uC815\uC0B0 \uADE0\uD615" : "\uC544\uB798\uC5D0\uC11C \uAC1C\uC778\uBCC4 \uC815\uC0B0\uC744 \uD655\uC778\uD558\uC138\uC694."}</small></div></div>
     <h3 class="budget-heading">\uACB0\uC81C \uB0B4\uC5ED <small>\uB0A0\uC9DC\xB7\uC2DC\uAC04\uC774 \uBE60\uB978 \uC21C</small></h3><div class="expense-list">${expenses.map((ex) => {
       const splits = data.expense_splits.filter((s) => s.expense_id === ex.id), own = true;
       return `<article class="card expense-card"><div class="expense-top"><div><span class="section-kicker">${fmt(ex.occurred_at)} \xB7 ${escapeHtml(name(ex.paid_by))} \uACB0\uC81C</span><h4>${escapeHtml(ex.item)}</h4></div><strong>${won(ex.amount)}</strong></div><div class="split-details"><span class="badge">${ex.split_mode === "all" ? "\uC804\uBD80" : "\uC77C\uBD80"} \xB7 ${splits.length}\uBA85</span><p>${splits.map((s) => `${escapeHtml(name(s.participant_id))} ${won(s.amount)}`).join(" \xB7 ")}</p></div>${own ? `<div class="guest-controls">${btn("\uC218\uC815", "expense-edit", ex.id)}${btn("\uC0AD\uC81C", "expense-delete", ex.id, "small quiet danger")}</div>` : ""}</article>`;
@@ -235,41 +236,46 @@
   var DEMO_KEY = "namjjok-demo-v1";
   var clone = (value) => structuredClone(value);
   function upgradeDemo(data) {
-    if (data.schema_version === 4) return data;
+    if (data.schema_version === 5) return data;
     const seed = createSeed();
-    data.expenses || (data.expenses = []);
-    data.expense_splits || (data.expense_splits = []);
-    data.participants.forEach((p, i) => {
-      if (p.name === "\uC8FC\uCD5C\uC790" || p.name === `\uCE5C\uAD6C ${i}`) p.name = `\uCE5C\uAD6C ${i + 1}`;
-      delete p.role;
-      if (p.is_placeholder === void 0) p.is_placeholder = /^친구 [1-8]$/.test(p.name);
+    if (data.schema_version !== 4) {
+      data.expenses || (data.expenses = []);
+      data.expense_splits || (data.expense_splits = []);
+      data.participants.forEach((p, i) => {
+        if (p.name === "\uC8FC\uCD5C\uC790" || p.name === `\uCE5C\uAD6C ${i}`) p.name = `\uCE5C\uAD6C ${i + 1}`;
+        delete p.role;
+        if (p.is_placeholder === void 0) p.is_placeholder = /^친구 [1-8]$/.test(p.name);
+      });
+      data.polls.forEach((p) => {
+        delete p.status;
+        delete p.deadline;
+        delete p.confirmed_candidate_id;
+        delete p.decision_reason;
+      });
+      for (const index of [1, 20]) {
+        const row = data.schedule.find((s) => s.id === seed.schedule[index].id);
+        if (row) Object.assign(row, { title: seed.schedule[index].title, description: seed.schedule[index].description, start_time: seed.schedule[index].start_time, verified: true });
+      }
+      for (const person of seed.participants) {
+        const existing = data.participants.find((p) => p.id === person.id);
+        if (existing) Object.assign(existing, { name: person.name, is_placeholder: false });
+      }
+      for (const index of [8, 10, 15]) {
+        const row = data.schedule.find((s) => s.id === seed.schedule[index].id);
+        if (row) row.title = seed.schedule[index].title;
+      }
+      const lodging = data.lodgings.find((l) => l.id === seed.lodgings[1].id);
+      if (lodging) Object.assign(lodging, { name: seed.lodgings[1].name, notes: seed.lodgings[1].notes });
+      const stay = data.schedule.find((s) => s.id === seed.schedule[16].id);
+      if (stay) stay.description = seed.schedule[16].description;
+      data.trip.title = seed.trip.title;
+      delete data.me;
+      delete data.invitations;
+    }
+    data.participants.forEach((p) => {
+      p.in_settlement = seed.participants.some((s) => s.id === p.id) || data.expenses.some((x) => x.paid_by === p.id && !x.deleted_at);
     });
-    data.polls.forEach((p) => {
-      delete p.status;
-      delete p.deadline;
-      delete p.confirmed_candidate_id;
-      delete p.decision_reason;
-    });
-    for (const index of [1, 20]) {
-      const row = data.schedule.find((s) => s.id === seed.schedule[index].id);
-      if (row) Object.assign(row, { title: seed.schedule[index].title, description: seed.schedule[index].description, start_time: seed.schedule[index].start_time, verified: true });
-    }
-    for (const person of seed.participants) {
-      const existing = data.participants.find((p) => p.id === person.id);
-      if (existing) Object.assign(existing, { name: person.name, is_placeholder: false });
-    }
-    for (const index of [8, 10, 15]) {
-      const row = data.schedule.find((s) => s.id === seed.schedule[index].id);
-      if (row) row.title = seed.schedule[index].title;
-    }
-    const lodging = data.lodgings.find((l) => l.id === seed.lodgings[1].id);
-    if (lodging) Object.assign(lodging, { name: seed.lodgings[1].name, notes: seed.lodgings[1].notes });
-    const stay = data.schedule.find((s) => s.id === seed.schedule[16].id);
-    if (stay) stay.description = seed.schedule[16].description;
-    data.trip.title = seed.trip.title;
-    delete data.me;
-    delete data.invitations;
-    data.schema_version = 4;
+    data.schema_version = 5;
     return data;
   }
   var DemoRepository = class {
@@ -319,7 +325,7 @@
               me2.name = nickname;
               me2.is_placeholder = false;
             } else {
-              me2 = { id: newId(), trip_id: TRIP_ID, name: nickname, active: true, is_placeholder: false };
+              me2 = { id: newId(), trip_id: TRIP_ID, name: nickname, active: true, is_placeholder: false, in_settlement: false };
               data.participants.push(me2);
             }
           }
@@ -391,11 +397,12 @@
             if (slot) {
               slot.name = name;
               slot.is_placeholder = false;
-            } else data.participants.push({ id: newId(), trip_id: TRIP_ID, name, active: true, is_placeholder: false });
+            } else data.participants.push({ id: newId(), trip_id: TRIP_ID, name, active: true, is_placeholder: false, in_settlement: false });
           }
         } else if (["expense_create", "expense_edit"].includes(action2)) {
           if (action2 === "expense_create" && data.expenses.some((x) => x.request_id === payload.request_id && x.paid_by === me2.id)) return null;
           if (action2 === "expense_create" && data.expenses.some((x) => x.request_id === payload.request_id)) throw new Error("\uB2E4\uB978 \uACB0\uC81C \uB0B4\uC5ED\uC758 \uC694\uCCAD \uC2DD\uBCC4\uC790\uC608\uC694.");
+          if (action2 === "expense_create") me2.in_settlement = true;
           const input = validateExpense(payload, data.participants);
           let expense;
           if (action2 === "expense_edit") {
@@ -562,8 +569,8 @@
   } catch {
   }
   if (new URLSearchParams(location.hash.slice(1)).has("invite")) history.replaceState(null, "", location.pathname + location.search + "#schedule");
-  function nicknameField(value = lastNickname) {
-    return field("\uB2C9\uB124\uC784", "nickname", value, "text", 'required maxlength="40" autocomplete="nickname"') + '<p class="muted">\uAC19\uC740 \uB2C9\uB124\uC784\uC744 \uC0AC\uC6A9\uD558\uBA74 \uD22C\uD45C\uC640 \uC815\uC0B0 \uB0B4\uC5ED\uC744 \uD568\uAED8 \uBAA8\uC544 \uBCFC \uC218 \uC788\uC5B4\uC694.</p>';
+  function nicknameField(value = lastNickname, hint = "\uAC19\uC740 \uB2C9\uB124\uC784\uC744 \uC0AC\uC6A9\uD558\uBA74 \uD22C\uD45C\uC640 \uC815\uC0B0 \uB0B4\uC5ED\uC744 \uD568\uAED8 \uBAA8\uC544 \uBCFC \uC218 \uC788\uC5B4\uC694.") {
+    return field("\uB2C9\uB124\uC784", "nickname", value, "text", 'required maxlength="40" autocomplete="nickname"') + (hint ? `<p class="muted">${hint}</p>` : "");
   }
   function rememberNickname(value) {
     lastNickname = validateNickname(value);
@@ -650,7 +657,7 @@
     else if (state.section === "votes") $("#main").innerHTML = state.pollId && pollById(state.pollId) ? renderPoll(pollById(state.pollId)) : renderVotes();
     else if (state.section === "lodgings") $("#main").innerHTML = renderLodgings();
     else if (state.section === "guestbook") $("#main").innerHTML = canEdit() ? renderGuestbook() : '<div class="notice">\uACF5\uC720 \uB370\uC774\uD130 \uC124\uC815 \uD6C4 \uBC29\uBA85\uB85D\uC744 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC5B4\uC694.</div>';
-    else if (state.section === "budget") $("#main").innerHTML = canEdit() ? renderBudget(state.data, me()) : '<div class="notice">\uACF5\uC720 \uB370\uC774\uD130 \uC124\uC815 \uD6C4 \uC815\uC0B0 \uB0B4\uC5ED\uC744 \uD568\uAED8 \uB4F1\uB85D\uD560 \uC218 \uC788\uC5B4\uC694.</div>';
+    else if (state.section === "budget") $("#main").innerHTML = canEdit() ? renderBudget(state.data, [me()].find((p) => p && settles(p))) : '<div class="notice">\uACF5\uC720 \uB370\uC774\uD130 \uC124\uC815 \uD6C4 \uC815\uC0B0 \uB0B4\uC5ED\uC744 \uD568\uAED8 \uB4F1\uB85D\uD560 \uC218 \uC788\uC5B4\uC694.</div>';
     else {
       state.section = "schedule";
       $("#main").innerHTML = renderSchedule();
@@ -683,7 +690,7 @@
     return heading("A PLACE TO REST", "\uC219\uC18C", "\uBC24\uC5D0\uB294 \uB290\uAE0B\uD558\uAC8C, \uB0B4\uC77C\uC758 \uC5EC\uD589\uC744 \uC900\uBE44\uD574\uC694.") + `<div class="lodging-grid">${state.data.lodgings.map((l, i) => `<article class="card lodging-card"><div class="lodging-visual ${i ? "suncheon" : ""}" aria-hidden="true"><span>${escapeHtml(l.city)}</span><small>${i ? "AMONG THE REEDS" : "BY THE SEA"}</small></div><span class="section-kicker">NIGHT 0${i + 1} \xB7 ${shortDate(l.check_in)} \u2192 ${shortDate(l.check_out)}</span><h3>${escapeHtml(l.name)}</h3><span class="badge ${l.verified ? "" : "pending"}">${l.verified ? "\uC219\uC18C \uC815\uBCF4 \uD655\uC778\uB428" : "\uC608\uC57D \uBC0F \uC0C1\uC138 \uC815\uBCF4 \uD655\uC778 \uD544\uC694"}</span><p>${escapeHtml(l.notes)}</p>${link(l.url, i ? "\uB124\uC774\uBC84 \uC9C0\uB3C4\uC5D0\uC11C \uBCF4\uAE30" : "Airbnb\uC5D0\uC11C \uBCF4\uAE30", "external-link")}${canEdit() ? `<div style="margin-top:18px">${button("\uC219\uC18C \uC815\uBCF4 \uC218\uC815", "lodging-edit", l.id, "small")}</div>` : ""}</article>`).join("")}</div>`;
   }
   function renderGuestbook() {
-    return heading("LEAVE A LITTLE NOTE", "\uC5EC\uD589 \uC804, \uD55C\uB9C8\uB514", "\uAE30\uB300\uD558\uB294 \uC21C\uAC04, \uAC00\uC838\uAC08 \uAC04\uC2DD, \uD558\uACE0 \uC2F6\uC740 \uC774\uC57C\uAE30. \uD3B8\uD558\uAC8C \uB0A8\uACA8\uC694.") + `<form class="card guest-form" data-form="guestbook-create"><div class="guest-top"><span class="avatar">${escapeHtml((state.guestNicknameDraft || "?").slice(0, 1))}</span><strong>${escapeHtml(state.guestNicknameDraft || "\uB2C9\uB124\uC784\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694.")}</strong></div>${nicknameField(state.guestNicknameDraft ?? "")}<label class="field" for="guest-content">\uCE5C\uAD6C\uB4E4\uC5D0\uAC8C \uB0A8\uAE38 \uBA54\uC2DC\uC9C0<textarea id="guest-content" name="content" maxlength="1000" required placeholder="\uC774\uBC88 \uC5EC\uD589\uC5D0\uC11C \uAC00\uC7A5 \uAE30\uB300\uB418\uB294 \uAC74\u2026">${escapeHtml(state.guestDraft)}</textarea></label><p class="form-error" role="alert"></p><div class="form-footer"><span>\uCD5C\uB300 1,000\uC790 \xB7 10\uCD08\uC5D0 \uD55C \uBC88</span><button class="primary" type="submit">\uBA54\uC2DC\uC9C0 \uB0A8\uAE30\uAE30</button></div></form><div class="guest-list">${state.entries.map((entry) => {
+    return heading("LEAVE A LITTLE NOTE", "\uC5EC\uD589 \uC804, \uD55C\uB9C8\uB514", "\uAE30\uB300\uD558\uB294 \uC21C\uAC04, \uAC00\uC838\uAC08 \uAC04\uC2DD, \uD558\uACE0 \uC2F6\uC740 \uC774\uC57C\uAE30. \uD3B8\uD558\uAC8C \uB0A8\uACA8\uC694.") + `<form class="card guest-form" data-form="guestbook-create"><div class="guest-top"><span class="avatar">${escapeHtml((state.guestNicknameDraft || "?").slice(0, 1))}</span><strong>${escapeHtml(state.guestNicknameDraft || "\uB2C9\uB124\uC784\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694.")}</strong></div>${nicknameField(state.guestNicknameDraft ?? "", "")}<label class="field" for="guest-content">\uCE5C\uAD6C\uB4E4\uC5D0\uAC8C \uB0A8\uAE38 \uBA54\uC2DC\uC9C0<textarea id="guest-content" name="content" maxlength="1000" required placeholder="\uC774\uBC88 \uC5EC\uD589\uC5D0\uC11C \uAC00\uC7A5 \uAE30\uB300\uB418\uB294 \uAC74\u2026">${escapeHtml(state.guestDraft)}</textarea></label><p class="form-error" role="alert"></p><div class="form-footer"><span>\uCD5C\uB300 1,000\uC790 \xB7 10\uCD08\uC5D0 \uD55C \uBC88</span><button class="primary" type="submit">\uBA54\uC2DC\uC9C0 \uB0A8\uAE30\uAE30</button></div></form><div class="guest-list">${state.entries.map((entry) => {
       const person = state.data.participants.find((p) => p.id === entry.participant_id);
       return `<article class="card"><div class="guest-top"><span class="avatar">${escapeHtml((person?.name || "?").slice(0, 1))}</span><div><strong>${escapeHtml(person?.name || "\uCC38\uC5EC\uC790")}</strong><time datetime="${escapeHtml(entry.created_at)}">${fmtDate(entry.created_at)}${entry.updated_at !== entry.created_at ? " \xB7 \uC218\uC815\uB428" : ""}</time></div></div><p class="guest-message">${escapeHtml(entry.content)}</p><div class="guest-controls">${canEdit() ? button("\uC218\uC815", "guest-edit", entry.id, "small quiet") : ""}${canEdit() ? button("\uC0AD\uC81C", "guest-delete", entry.id, "small quiet danger") : ""}</div></article>`;
     }).join("") || '<div class="empty"><strong>\uC6B0\uB9AC \uC5EC\uD589\uC758 \uCCAB \uBB38\uC7A5.</strong>\uCCAB \uBC88\uC9F8 \uBA54\uC2DC\uC9C0\uB97C \uB0A8\uACA8 \uC8FC\uC138\uC694.</div>'}</div>${state.entries.length >= state.limit ? `<div style="margin-top:20px">${button("\uBA54\uC2DC\uC9C0 \uB354 \uBCF4\uAE30", "guest-more")}</div>` : ""}`;
@@ -695,7 +702,7 @@
     showForm(
       expense ? "\uB0B4 \uACB0\uC81C \uB0B4\uC5ED \uC218\uC815" : "\uB0B4 \uACB0\uC81C \uB0B4\uC5ED \uB4F1\uB85D",
       expense ? "expense-edit" : "expense-create",
-      `<p class="dialog-description">${expense ? "\uACB0\uC81C\uC790: " + escapeHtml(state.data.participants.find((p) => p.id === expense.paid_by)?.name || "\uCC38\uC5EC\uC790") : "\uC785\uB825\uD55C \uB2C9\uB124\uC784\uC744 \uACB0\uC81C\uC790\uB85C \uAE30\uB85D\uD574\uC694."} \xB7 \uC6D0 \uB2E8\uC704\uB85C \uADE0\uB4F1 \uBC30\uBD84\uD574\uC694.</p><div class="form-row">${field("\uB0A0\uC9DC", "expense_date", current.slice(0, 10), "date", "required")}${field("\uC2DC\uAC04", "expense_time", current.slice(11, 16), "time", "required")}</div><div class="form-row">${field("\uC740\uD589\uBA85 (\uC120\uD0DD)", "bank_name", account.bank_name, "text", 'maxlength="40" placeholder="\uC608: \uCE74\uCE74\uC624\uBC45\uD06C"')}${field("\uACC4\uC88C\uBC88\uD638 (\uC120\uD0DD)", "account_number", account.account_number, "text", 'maxlength="100" placeholder="\uC608: 3333-00-1234567"')}</div>` + field("\uD56D\uBAA9", "item", expense?.item || "", "text", 'required maxlength="100"') + field("\uAE08\uC561 (\uC6D0)", "amount", expense?.amount || "", "number", 'required min="1" max="2147483647" step="1"') + `<fieldset class="split-fieldset"><legend>\uC815\uC0B0 \uB300\uC0C1\uC790</legend><div class="split-modes"><label><input type="radio" name="split_mode" value="all" ${expense?.split_mode !== "some" ? "checked" : ""}> \uC804\uBD80</label><label><input type="radio" name="split_mode" value="some" ${expense?.split_mode === "some" ? "checked" : ""}> \uC77C\uBD80</label></div><div id="split-people" class="split-people" ${expense?.split_mode === "some" ? "" : "hidden"}>${state.data.participants.filter((p) => p.active).map((p) => `<label><input type="checkbox" name="participant_ids" value="${escapeHtml(p.id)}" ${ids.includes(p.id) ? "checked" : ""}>${escapeHtml(p.name)}</label>`).join("")}</div><p class="muted">\u2018\uC804\uBD80\u2019\uB294 \uC800\uC7A5\uD560 \uB54C \uCC38\uC5EC \uC911\uC778 \uCE5C\uAD6C \uC804\uC6D0\uC774\uC5D0\uC694.</p></fieldset>`,
+      `<p class="dialog-description">${expense ? "\uACB0\uC81C\uC790: " + escapeHtml(state.data.participants.find((p) => p.id === expense.paid_by)?.name || "\uCC38\uC5EC\uC790") : "\uC785\uB825\uD55C \uB2C9\uB124\uC784\uC744 \uACB0\uC81C\uC790\uB85C \uAE30\uB85D\uD574\uC694."} \xB7 \uC6D0 \uB2E8\uC704\uB85C \uADE0\uB4F1 \uBC30\uBD84\uD574\uC694.</p><div class="form-row">${field("\uB0A0\uC9DC", "expense_date", current.slice(0, 10), "date", "required")}${field("\uC2DC\uAC04", "expense_time", current.slice(11, 16), "time", "required")}</div><div class="form-row">${field("\uC740\uD589\uBA85 (\uC120\uD0DD)", "bank_name", account.bank_name, "text", 'maxlength="40" placeholder="\uC608: \uCE74\uCE74\uC624\uBC45\uD06C"')}${field("\uACC4\uC88C\uBC88\uD638 (\uC120\uD0DD)", "account_number", account.account_number, "text", 'maxlength="100" placeholder="\uC608: 3333-00-1234567"')}</div>` + field("\uD56D\uBAA9", "item", expense?.item || "", "text", 'required maxlength="100"') + field("\uAE08\uC561 (\uC6D0)", "amount", expense?.amount || "", "number", 'required min="1" max="2147483647" step="1"') + `<fieldset class="split-fieldset"><legend>\uC815\uC0B0 \uB300\uC0C1\uC790</legend><div class="split-modes"><label><input type="radio" name="split_mode" value="all" ${expense?.split_mode !== "some" ? "checked" : ""}> \uC804\uBD80</label><label><input type="radio" name="split_mode" value="some" ${expense?.split_mode === "some" ? "checked" : ""}> \uC77C\uBD80</label></div><div id="split-people" class="split-people" ${expense?.split_mode === "some" ? "" : "hidden"}>${state.data.participants.filter(settles).map((p) => `<label><input type="checkbox" name="participant_ids" value="${escapeHtml(p.id)}" ${ids.includes(p.id) ? "checked" : ""}>${escapeHtml(p.name)}</label>`).join("")}</div><p class="muted">\u2018\uC804\uBD80\u2019\uB294 \uC800\uC7A5\uD560 \uB54C \uC815\uC0B0 \uBA64\uBC84 \uC804\uC6D0\uC774\uC5D0\uC694.</p></fieldset>`,
       expense?.id || "",
       "\uB0B4\uC5ED \uC800\uC7A5"
     );
@@ -773,7 +780,7 @@
     }
     const nickname = validateNickname(payload.nickname);
     const result = await state.repo.mutate(action2, { ...payload, nickname });
-    rememberNickname(nickname);
+    if (!action2.startsWith("guestbook")) rememberNickname(nickname);
     await refresh();
     return result;
   }
