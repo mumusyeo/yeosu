@@ -14,7 +14,7 @@ const anonymousForms = ['schedule-edit','schedule-add','lodging'];
 let toastTimer,refreshTimer,expiryTimer,lastNickname='';
 try{lastNickname=localStorage.getItem('namjjok-nickname')||'';}catch{}
 if(new URLSearchParams(location.hash.slice(1)).has('invite'))history.replaceState(null,'',location.pathname+location.search+'#schedule');
-function nicknameField(value=lastNickname,hint='같은 닉네임을 사용하면 투표와 정산 내역을 함께 모아 볼 수 있어요.'){return field('닉네임','nickname',value,'text','required maxlength="40" autocomplete="nickname"')+(hint?`<p class="muted">${hint}</p>`:'');}
+function nicknameField(value='',hint='같은 닉네임을 사용하면 투표와 정산 내역을 함께 모아 볼 수 있어요.'){return field('닉네임','nickname',value,'text','required maxlength="40" autocomplete="nickname"')+(hint?`<p class="muted">${hint}</p>`:'');}
 function rememberNickname(value){lastNickname=validateNickname(value);try{localStorage.setItem('namjjok-nickname',lastNickname);}catch{}}
 function toast(message) {$('#toast').textContent=message;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),4000);}
 function lockUi(value) {

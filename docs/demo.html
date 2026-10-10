@@ -569,7 +569,7 @@
   } catch {
   }
   if (new URLSearchParams(location.hash.slice(1)).has("invite")) history.replaceState(null, "", location.pathname + location.search + "#schedule");
-  function nicknameField(value = lastNickname, hint = "\uAC19\uC740 \uB2C9\uB124\uC784\uC744 \uC0AC\uC6A9\uD558\uBA74 \uD22C\uD45C\uC640 \uC815\uC0B0 \uB0B4\uC5ED\uC744 \uD568\uAED8 \uBAA8\uC544 \uBCFC \uC218 \uC788\uC5B4\uC694.") {
+  function nicknameField(value = "", hint = "\uAC19\uC740 \uB2C9\uB124\uC784\uC744 \uC0AC\uC6A9\uD558\uBA74 \uD22C\uD45C\uC640 \uC815\uC0B0 \uB0B4\uC5ED\uC744 \uD568\uAED8 \uBAA8\uC544 \uBCFC \uC218 \uC788\uC5B4\uC694.") {
     return field("\uB2C9\uB124\uC784", "nickname", value, "text", 'required maxlength="40" autocomplete="nickname"') + (hint ? `<p class="muted">${hint}</p>` : "");
   }
   function rememberNickname(value) {
