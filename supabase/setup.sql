@@ -360,6 +360,7 @@ $migration_001$;
   if to_regclass('public.expenses') is null then
     execute $migration_002$-- Upgrade v1 to equal participants, continuously open polls and shared expenses.
 -- Apply after 001_trip.sql; seed.sql follows both migrations for a new project.
+
 create table public.expenses (
   id uuid primary key default gen_random_uuid(), trip_id uuid not null references public.trips,
   paid_by uuid not null, occurred_at timestamptz not null check(isfinite(occurred_at)),
@@ -630,7 +631,8 @@ update public.schedule_items set title='쏘카 반납 · 순천역 이동',start
   where id='b0000000-0000-4000-8000-000000000021' and trip_id='a0000000-0000-4000-8000-000000000001';
 update public.participants set name='친구 1' where id='f0000000-0000-4000-8000-000000000001' and name='주최자';
 
-alter publication supabase_realtime add table public.expenses,public.expense_splits;$migration_002$;
+alter publication supabase_realtime add table public.expenses,public.expense_splits;
+$migration_002$;
   end if;
 end;
 $install_base$;

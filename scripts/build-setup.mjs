@@ -1,6 +1,6 @@
 import { readFileSync,writeFileSync } from 'node:fs';
 const root=new URL('../',import.meta.url);
-const read=file=>readFileSync(new URL('supabase/'+file,root),'utf8').replace(/^\s*(?:begin|commit);\s*$/gmi,'');
+const read=file=>readFileSync(new URL('supabase/'+file,root),'utf8').replace(/\r\n/g,'\n').replace(/^\s*(?:begin|commit);\s*$/gmi,'');
 const sql=`-- Generated: npm run build. Run the WHOLE file in the project SQL Editor.
 -- Supports a new project and upgrades from v1/v2. Existing records and edits are retained.
 begin;
@@ -26,5 +26,5 @@ commit;
 select 'https://mumusyeo.github.io/yeosu/' as invitation_url,
   'Ready: shared nickname board. No Auth configuration or personal links needed.' as status;
 `;
-writeFileSync(new URL('supabase/setup.sql',root),sql);
+writeFileSync(new URL('supabase/setup.sql',root),sql.replace(/\r\n/g,'\n'));
 console.log('Built supabase/setup.sql: install/upgrade shared nickname board; no Auth setup.');
