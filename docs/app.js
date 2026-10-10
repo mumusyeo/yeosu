@@ -47,7 +47,8 @@ function showPublicPreview() {
 function renderConnection() {
   const el=$('#connection');
   el.className='connection'+(state.repo?.demo?' demo':'');
-  el.innerHTML=state.repo?.demo?'<strong>로컬 데모</strong> <span>이 브라우저에만 저장돼요. 등록할 때 닉네임을 입력해 주세요.</span>':state.publicPreview?`<strong>기본 일정 보기</strong> <span>${e(state.error||'공유 기능을 연결하고 있어요.')}</span>`:state.error?`<strong>연결 확인 중</strong> <span>${e(state.error)}</span>`:!navigator.onLine?'<strong>오프라인</strong> <span>다시 연결되면 저장할 수 있어요.</span>':'<strong>함께 만드는 여행</strong> <span>로그인 없이 누구나 이용해요. 등록할 때 닉네임을 입력해 주세요.</span>';
+  el.innerHTML=state.repo?.demo?'<strong>로컬 데모</strong> <span>이 브라우저에만 저장돼요. 등록할 때 닉네임을 입력해 주세요.</span>':state.publicPreview?`<strong>기본 일정 보기</strong> <span>${e(state.error||'공유 기능을 연결하고 있어요.')}</span>`:state.error?`<strong>연결 확인 중</strong> <span>${e(state.error)}</span>`:!navigator.onLine?'<strong>오프라인</strong> <span>다시 연결되면 저장할 수 있어요.</span>':'';
+  el.hidden=!el.textContent.trim();
   $('#identity').innerHTML=lastNickname?`<span class="avatar" aria-hidden="true">${e(lastNickname.slice(0,1))}</span><span>${e(lastNickname)}</span>`:'<span class="muted">모두 함께 만드는 여행</span>';
 }
 function renderNav() {

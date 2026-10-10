@@ -11,3 +11,18 @@
 @media(max-width:375px){.hero{padding:0 17px}h1{font-size:34px}.date-tab{padding:11px 8px}.schedule-row{grid-template-columns:45px 1fr;gap:15px}.schedule-row:not(:last-child):before{left:51px}.schedule-card{padding:14px}.trip-pills{gap:5px}.trip-pills span{font-size:9px}.balance-card dl{gap:6px}.budget-stats strong{font-size:15px}}
 
 .hero-art{height:auto;aspect-ratio:16/9;border-radius:0}
+
+/* Full-width photograph banner with readable text over the slideshow. */
+.hero{position:relative;max-width:none;width:100%;margin:24px 0 38px;padding:0;display:grid;grid-template-columns:1fr;gap:0;min-height:max(600px,calc(100svh - 130px));background:var(--paper);isolation:isolate}
+.hero .hero-art{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto;border-radius:0;background:var(--paper);z-index:0}
+.hero .hero-slide.is-active{opacity:.42}
+.hero .hero-art:after{inset:0;background:linear-gradient(180deg,#f8f6ef18,#f8f6ef45 60%,#f8f6ef88)}
+.hero .hero-copy{position:relative;z-index:1;width:min(1120px,100%);margin:auto;padding:64px 32px 130px;text-align:center;pointer-events:none}
+.hero h1{font-size:clamp(42px,5.8vw,76px);line-height:1.45;color:var(--ink)}
+.hero .hero-description{color:var(--ink);font-size:16px;line-height:2;margin:25px 0}
+.hero .trip-pills{justify-content:center;gap:10px}
+.hero .trip-pills span{background:#f8f6efb8;border-color:#9eaaa0;color:var(--ink)}
+.hero .hero-link{pointer-events:auto;color:var(--ink)}
+.hero .art-caption{color:var(--ink)}
+.connection[hidden]{display:none}
+@media(max-width:700px){.hero{margin:20px 0 28px;min-height:max(540px,calc(100svh - 120px))}.hero .hero-copy{padding:55px 20px 145px}.hero h1{font-size:clamp(36px,9vw,54px);letter-spacing:-1.8px}.hero .hero-description{font-size:13px}.hero .art-caption{left:20px;right:20px;font-size:8px;letter-spacing:.5px}.hero .trip-pills span{font-size:10px}}

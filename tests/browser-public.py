@@ -31,7 +31,7 @@ try:
         page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
         page.goto(BASE);assert page.get_by_role('link',name='여행 설정',exact=True).count()==0
         expect(page.locator('.schedule-row')).to_have_count(7)
-        expect(page.locator('#connection')).to_contain_text('로그인 없이 누구나')
+        expect(page.locator('#connection')).to_be_hidden()
         assert page.locator('[data-action="login"],[data-action="invite"],[data-action="logout"]').count()==0
         page.locator('[data-action="poll"]').first.click();page.locator('[data-action="vote"]').first.click()
         dialog=page.locator('#dialog');dialog.locator('[name="nickname"]').fill('소금')
@@ -49,7 +49,7 @@ try:
         fallback.get_by_role('link',name='숙소',exact=True).click();expect(fallback.locator('.lodging-card')).to_have_count(2)
         fallback.evaluate("window.__missing=false;document.dispatchEvent(new Event('visibilitychange'))")
         assert fallback.get_by_role('link',name='여행 설정',exact=True).count()==0
-        expect(fallback.locator('#connection')).to_contain_text('로그인 없이 누구나')
+        expect(fallback.locator('#connection')).to_be_hidden()
         missing.close()
         blocked=browser.new_context();blocked.route('**/vendor/supabase.js',lambda route:route.abort())
         offline=blocked.new_page();offline.on('pageerror',lambda e:errors.append(str(e)));offline.goto(BASE)
