@@ -314,7 +314,7 @@
     }
     async mutate(action2, payload) {
       const work = async () => {
-        const data = clone(this.read()), anonymous = ["schedule", "schedule_add", "lodging"].includes(action2), nickname = anonymous ? "" : validateNickname(payload.nickname);
+        const data = clone(this.read()), anonymous = ["schedule", "schedule_add", "lodging", "guestbook_delete"].includes(action2), nickname = anonymous ? "" : validateNickname(payload.nickname);
         const knownActions = ["vote", "candidate", "guestbook_create", "guestbook_edit", "guestbook_delete", "hide_candidate", "schedule", "schedule_add", "lodging", "participant", "participant_add", "expense_create", "expense_edit", "expense_delete"];
         if (!knownActions.includes(action2)) throw new Error("\uC9C0\uC6D0\uD558\uC9C0 \uC54A\uB294 \uC791\uC5C5\uC774\uC5D0\uC694.");
         let me2 = data.participants.find((p) => normalizeName(p.name) === normalizeName(nickname));
@@ -570,7 +570,7 @@
   }
   if (new URLSearchParams(location.hash.slice(1)).has("invite")) history.replaceState(null, "", location.pathname + location.search + "#schedule");
   function nicknameField(value = "", hint = "\uAC19\uC740 \uB2C9\uB124\uC784\uC744 \uC0AC\uC6A9\uD558\uBA74 \uD22C\uD45C\uC640 \uC815\uC0B0 \uB0B4\uC5ED\uC744 \uD568\uAED8 \uBAA8\uC544 \uBCFC \uC218 \uC788\uC5B4\uC694.") {
-    return field("\uB2C9\uB124\uC784", "nickname", value, "text", 'required maxlength="40" autocomplete="nickname"') + (hint ? `<p class="muted">${hint}</p>` : "");
+    return field("\uB2C9\uB124\uC784", "nickname", value, "text", 'required maxlength="40" autocomplete="off"') + (hint ? `<p class="muted">${hint}</p>` : "");
   }
   function rememberNickname(value) {
     lastNickname = validateNickname(value);
@@ -715,8 +715,8 @@
   function showForm(title, form, body, id = "", submit = "\uC800\uC7A5\uD558\uAE30") {
     showDialog(title, `<form data-form="${form}" data-id="${escapeHtml(id)}">${anonymousForms.includes(form) ? "" : nicknameField()}${body}${formEnd(submit)}</form>`);
   }
-  function confirmAction(title, message, action2, id, extra = {}) {
-    showDialog(title, `<p class="dialog-description">${escapeHtml(message)}</p><form data-form="confirmation" data-id="${escapeHtml(id)}" data-action-name="${action2}" data-extra="${escapeHtml(JSON.stringify(extra))}">${nicknameField()}${formEnd("\uD655\uC778")}</form>`);
+  function confirmAction(title, message, action2, id, extra = {}, anonymous = false) {
+    showDialog(title, `<p class="dialog-description">${escapeHtml(message)}</p><form data-form="confirmation" data-id="${escapeHtml(id)}" data-action-name="${action2}" data-extra="${escapeHtml(JSON.stringify(extra))}" data-anonymous="${anonymous}">${anonymous ? "" : nicknameField()}${formEnd("\uD655\uC778")}</form>`);
   }
   function scheduleForm(item) {
     showForm("\uC77C\uC815 \uC218\uC815", "schedule-edit", field("\uC81C\uBAA9", "title", item.title, "text", 'required maxlength="100"') + dateField(item.date) + `<div class="form-row">${field("\uC2DC\uC791 \uC2DC\uAC04", "start_time", item.start_time?.slice(0, 5) || "", "time")}${field("\uC885\uB8CC \uC2DC\uAC04", "end_time", item.end_time?.slice(0, 5) || "", "time")}</div>` + field("\uC77C\uC815 \uD45C\uC2DC \uC21C\uC11C", "position", item.position, "number", 'min="1" max="9999" required') + textarea("\uC124\uBA85", "description", item.description, 1e3) + check("\uD655\uC778\uB41C \uC77C\uC815\uC73C\uB85C \uD45C\uC2DC", "verified", item.verified), item.id);
@@ -834,7 +834,7 @@
     else if (name === "guest-edit") {
       const entry = state.entries.find((x) => x.id === id);
       showForm("\uBA54\uC2DC\uC9C0 \uC218\uC815", "guest-edit", textarea("\uBA54\uC2DC\uC9C0", "content", entry.content, 1e3), id);
-    } else if (name === "guest-delete") confirmAction("\uBA54\uC2DC\uC9C0 \uC0AD\uC81C", "\uC774 \uBA54\uC2DC\uC9C0\uB97C \uC0AD\uC81C\uD560\uAE4C\uC694?", "guestbook_delete", id, { id });
+    } else if (name === "guest-delete") confirmAction("\uBA54\uC2DC\uC9C0 \uC0AD\uC81C", "\uC774 \uBA54\uC2DC\uC9C0\uB97C \uC0AD\uC81C\uD560\uAE4C\uC694?", "guestbook_delete", id, { id }, true);
     else if (name === "guest-more") {
       state.limit += 20;
       await refresh();
@@ -891,7 +891,7 @@
     const values = Object.fromEntries(new FormData(form)), id = form.dataset.id, type = form.dataset.form;
     try {
       if (!canEdit()) throw new Error("\uB2C9\uB124\uC784\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694.");
-      const nickname = anonymousForms.includes(type) ? void 0 : validateNickname(values.nickname);
+      const anonymous = anonymousForms.includes(type) || form.dataset.anonymous === "true", nickname = anonymous ? void 0 : validateNickname(values.nickname);
       const register = (action2, payload) => write(action2, { ...payload, nickname });
       let result;
       if (type === "vote") {
@@ -932,7 +932,7 @@
       $("#dialog").close();
       toast(state.repo.demo ? "\uB370\uBAA8\uC5D0 \uC800\uC7A5\uD588\uC5B4\uC694." : "\uC800\uC7A5\uD588\uC5B4\uC694.");
     } catch (error) {
-      if (anonymousForms.includes(type) && /닉네임/.test(error.message)) error.message = "\uB2C9\uB124\uC784 \uC5C6\uC774 \uC800\uC7A5\uD558\uB824\uBA74 \uACF5\uC720 \uB370\uC774\uD130 \uC5C5\uB370\uC774\uD2B8\uAC00 \uD544\uC694\uD574\uC694. \uCD5C\uC2E0 setup.sql \uC801\uC6A9 \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.";
+      if ((anonymousForms.includes(type) || form.dataset.anonymous === "true") && /닉네임/.test(error.message)) error.message = "\uB2C9\uB124\uC784 \uC5C6\uC774 \uC800\uC7A5\uD558\uB824\uBA74 \uACF5\uC720 \uB370\uC774\uD130 \uC5C5\uB370\uC774\uD2B8\uAC00 \uD544\uC694\uD574\uC694. \uCD5C\uC2E0 setup.sql \uC801\uC6A9 \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.";
       if (form.isConnected) form.querySelector(".form-error").textContent = error.message;
       else toast(error.message);
     } finally {

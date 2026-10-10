@@ -123,6 +123,15 @@ await check('guestbook and vote nicknames stay out of settlement; only a payer j
   assert.equal((await members()).length,9);assert.equal(data.expense_splits.filter(s=>s.expense_id===created.id).length,9);
   await db.exec('reset role');await db.exec(read('migrations/009_settlement_members.sql'));assert.equal((await members()).length,9);
 });
+await db.exec('reset role');await db.exec(read('migrations/010_anonymous_guestbook_delete.sql'));
+await check('guestbook delete needs no nickname and adds no participant; guestbook edit still requires one',async()=>{
+  await role('anon');await mutate('guestbook_create',{nickname:'삭제 손님',content:'지울 글',request_id:crypto.randomUUID()});
+  const entry=(await rpc('trip_guestbook',[trip,20])).find(e=>e.content==='지울 글'),before=(await snap()).participants.length;
+  await assert.rejects(()=>mutate('guestbook_edit',{id:entry.id,content:'수정'}),/닉네임/);
+  await mutate('guestbook_delete',{id:entry.id});
+  assert(!(await rpc('trip_guestbook',[trip,20])).some(e=>e.id===entry.id));assert.equal((await snap()).participants.length,before);
+  await db.exec('reset role');
+});
 await db.close();
 await check('setup creates the common URL without tokens and safely repeats without overwriting edits',async()=>{
   const fresh=new PGlite();await fresh.exec(authStub);const setup=read('setup.sql'),results=await fresh.exec(setup);

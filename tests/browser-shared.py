@@ -81,6 +81,8 @@ try:
         b.locator('#dialog').get_by_label('메시지',exact=True).fill('누구나 함께 수정')
         b.locator('#dialog').get_by_role('button',name='저장하기',exact=True).click()
         expect(a.locator('.guest-message')).to_have_text('누구나 함께 수정')
+        b.locator('[data-action="guest-delete"]').click();assert b.locator('#dialog [name="nickname"]').count()==0
+        b.locator('#dialog').get_by_role('button',name='확인',exact=True).click();expect(a.locator('.guest-message')).to_have_count(0)
         a.get_by_role('link',name='여행 일정',exact=True).click();a.locator('[data-action="schedule-edit"]').first.click()
         assert a.locator('#dialog [name="nickname"]').count()==0 and a.locator('#identity').count()==0;a.get_by_label('제목',exact=True).fill('용산 → 여수EXPO · 함께 출발')
         a.locator('#dialog').get_by_role('button',name='저장하기',exact=True).click()
