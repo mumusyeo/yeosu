@@ -1,12 +1,13 @@
 import { escapeHtml as e, safeUrl, pollResult, resultLabel, validateCandidate, validateMessage, newId } from './domain.js';
 import { DemoRepository, SupabaseRepository } from './repository.js';
 import { renderBudget, validateExpense } from './expenses.js';
+import { createSeed } from './seed.js';
 
 const $ = selector => document.querySelector(selector);
 const dates = ['2026-11-06','2026-11-07','2026-11-08'];
 const days = ['여수, 바다를 만나는 날','여수에서 순천, 가을을 따라서','순천, 느긋한 마지막 하루'];
 const kindNames = {train:'TRAIN · 기차',move:'ON THE ROAD · 이동',food:'GOOD FOOD · 식사',cafe:'COFFEE BREAK · 카페',sight:'SLOW WALK · 관광',stay:'STAY · 숙소'};
-const state = {repo:null,data:null,entries:[],section:'schedule',date:dates[0],pollId:null,limit:20,loading:true,error:'',busy:false,guestDraft:'',requestId:newId(),unsubscribe:null,refreshing:false,refreshAgain:false,clockOffset:0,realtime:''};
+const state = {repo:null,data:null,publicPreview:false,entries:[],section:'schedule',date:dates[0],pollId:null,limit:20,loading:true,error:'',busy:false,guestDraft:'',requestId:newId(),unsubscribe:null,refreshing:false,refreshAgain:false,clockOffset:0,realtime:''};
 let toastTimer, refreshTimer, expiryTimer, inviteToken = new URLSearchParams(location.hash.slice(1)).get('invite');
 if (inviteToken) history.replaceState(null,'',`${location.pathname}${location.search}#schedule`);
 function toast(message) {$('#toast').textContent=message;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),4000);}
@@ -33,6 +34,16 @@ const fmtDate = value => new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',
 const localDateTime = value => value ? new Date(new Date(value).getTime()+9*3600000).toISOString().slice(0,16) : '';
 const fromKst = value => value ? new Date(`${value}:00+09:00`).toISOString() : null;
 
+function showPublicPreview() {
+  const seed=createSeed();
+  state.data={trip:seed.trip,schedule:seed.schedule,lodgings:seed.lodgings,polls:seed.polls,candidates:seed.candidates,votes:[],participants:[],invitations:[],expenses:[],expense_splits:[],me:null};
+  state.publicPreview=true;state.entries=[];state.guestDraft='';state.clockOffset=0;state.loading=false;
+  state.unsubscribe?.();state.unsubscribe=null;$('#dialog').close();
+}
+function participationNotice(title) {
+  return `<section class="gate card"><span class="section-kicker">JOIN THE TRIP</span><h2>${e(title)}</h2><p>친구별 초대 링크로 입장하면 함께 사용할 수 있어요. 기본 일정과 숙소는 지금도 둘러볼 수 있어요.</p><div class="gate-buttons">${button('다시 연결하기','retry','','small')}</div></section>`;
+}
+
 function renderConnection() {
   const el=$('#connection');
   if(state.repo?.demo) {
@@ -40,8 +51,13 @@ function renderConnection() {
     const people=state.data?.participants || state.repo.read().participants;
     el.innerHTML=`<strong>데모 · 다른 사람과 공유되지 않음</strong> <span>이 브라우저에서만 저장돼요.</span><label> 체험할 참여자<select id="demo-person" aria-label="데모 참여자">${people.filter(p=>p.active).map(p=>`<option value="${e(p.id)}" ${p.id===state.repo.participantId?'selected':''}>${e(p.name)}</option>`).join('')}</select></label>`;
   } else {
-    el.className=`connection ${state.error?'error':''}`;
-    el.textContent=state.error || (!navigator.onLine?'오프라인이에요. 연결 후 다시 시도해 주세요.':state.data?(state.realtime==='SUBSCRIBED'?'친구들과 실시간으로 함께 만드는 여행':'여행 연결됨 · 실시간 연결을 복구하고 있어요'):'친구별 초대 링크로 접속해 주세요.');
+    if(state.publicPreview){
+      el.className='connection';
+      el.innerHTML=`<strong>기본 일정 미리보기</strong> <span>공동 편집 내용과 투표 결과는 친구별 초대 링크로 입장해 확인해 주세요.</span>${state.error?`<span>${e(state.error)}</span>`:''}`;
+    }else{
+      el.className=`connection ${state.error?'error':''}`;
+      el.textContent=state.error || (!navigator.onLine?'오프라인이에요. 연결 후 다시 시도해 주세요.':state.data?(state.realtime==='SUBSCRIBED'?'친구들과 실시간으로 함께 만드는 여행':'여행 연결됨 · 실시간 연결을 복구하고 있어요'):'친구별 초대 링크로 접속해 주세요.');
+    }
   }
   $('#identity').innerHTML=me()?`<span class="avatar" aria-hidden="true">${e(me().name.slice(0,1))}</span><span>${e(me().name)}</span>${state.repo.demo?'':button('로그아웃','logout','','small quiet')}`:'<span class="muted">함께 만드는 여행</span>';
 }
@@ -59,8 +75,8 @@ function render() {
   if(state.section==='schedule') $('#main').innerHTML=renderSchedule();
   else if(state.section==='votes') $('#main').innerHTML=state.pollId&&pollById(state.pollId)?renderPoll(pollById(state.pollId)):renderVotes();
   else if(state.section==='lodgings') $('#main').innerHTML=renderLodgings();
-  else if(state.section==='guestbook') $('#main').innerHTML=renderGuestbook();
-  else if(state.section==='budget') $('#main').innerHTML=renderBudget(state.data,me());
+  else if(state.section==='guestbook') $('#main').innerHTML=canEdit()?renderGuestbook():participationNotice('친구들과 여행 이야기를 나눠요');
+  else if(state.section==='budget') $('#main').innerHTML=canEdit()?renderBudget(state.data,me()):participationNotice('예산과 정산은 함께 떠나는 친구들에게');
   else if(state.section==='settings' && canEdit()) $('#main').innerHTML=renderSettings();
   else {state.section='schedule';$('#main').innerHTML=renderSchedule();renderNav();}
   if(state.busy)lockUi(true);
@@ -71,20 +87,20 @@ function renderSchedule() {
     const poll=state.data.polls.find(p=>p.schedule_id===item.id),result=poll?resultFor(poll):null;
     const title=result?.leaders.length?result.leaders.map(c=>e(c.name)).join(' · '):e(item.title);
     const lodging=state.data.lodgings.find(l=>l.id===item.lodging_id);
-    return `<article class="schedule-row"><div class="time">${item.start_time?`${e(item.start_time.slice(0,5))}${item.end_time?`<br>↓ ${e(item.end_time.slice(0,5))}`:''}`:'시간 미정'}</div><div class="card schedule-card ${poll?'vote-card':''}"><div><span class="kind-label">${kindNames[item.kind]||'TRIP'}</span>${poll?`<span class="visually-hidden">${e(item.title)}</span>`:''}<h4>${title}</h4><p>${e(item.description)}</p>${poll?`<span class="badge ${result.kind==='waiting'||result.kind==='tie'?'pending':''}">${e(resultLabel(result,poll))}</span>`:`<span class="badge ${item.verified?'':'pending'}">${item.verified?'확인된 일정':'일정 초안'}</span>`}${lodging?`<br>${link(lodging.url,'숙소 자세히 보기','external-link')}`:''}</div>${poll?button('후보 보기 · 투표','poll',poll.id,'small'):canEdit()?button('수정','schedule-edit',item.id,'small quiet'):''}</div></article>`;
+    return `<article class="schedule-row"><div class="time">${item.start_time?`${e(item.start_time.slice(0,5))}${item.end_time?`<br>↓ ${e(item.end_time.slice(0,5))}`:''}`:'시간 미정'}</div><div class="card schedule-card ${poll?'vote-card':''}"><div><span class="kind-label">${kindNames[item.kind]||'TRIP'}</span>${poll?`<span class="visually-hidden">${e(item.title)}</span>`:''}<h4>${title}</h4><p>${e(item.description)}</p>${poll?`<span class="badge ${result.kind==='waiting'||result.kind==='tie'?'pending':''}">${e(state.publicPreview?'초기 후보 미리보기':resultLabel(result,poll))}</span>`:`<span class="badge ${item.verified?'':'pending'}">${item.verified?'확인된 일정':'일정 초안'}</span>`}${lodging?`<br>${link(lodging.url,'숙소 자세히 보기','external-link')}`:''}</div>${poll?button(state.publicPreview?'후보 보기':'후보 보기 · 투표','poll',poll.id,'small'):canEdit()?button('수정','schedule-edit',item.id,'small quiet'):''}</div></article>`;
   }).join('')}</div>`;
 }
 function renderVotes() {
-  return heading('GOOD FOOD, GOOD COMPANY','먹고 싶은 곳, 한 표','친구들이 후보를 더하고, 가장 많은 표를 받은 곳이 일정표에 보여요.')+`<div class="notice">일정마다 한 사람당 한 표. 언제든 선택을 바꾸거나 취소할 수 있고 현재 최다 득표가 일정표에 반영돼요.</div><div class="vote-grid">${state.data.polls.map(p=>{
+  return heading('GOOD FOOD, GOOD COMPANY','먹고 싶은 곳, 한 표','친구들이 후보를 더하고, 가장 많은 표를 받은 곳이 일정표에 보여요.')+`<div class="notice">${state.publicPreview?'기본 후보 미리보기예요. 실제 투표 결과 확인과 후보 추천은 친구별 초대 링크로 입장한 뒤 가능해요.':'일정마다 한 사람당 한 표. 언제든 선택을 바꾸거나 취소할 수 있고 현재 최다 득표가 일정표에 반영돼요.'}</div><div class="vote-grid">${state.data.polls.map(p=>{
     const item=itemForPoll(p),r=resultFor(p);
-    return `<article class="card poll-summary"><span class="section-kicker">${shortDate(item.date)} · ${item.kind==='cafe'?'CAFE':'FOOD'} · 항상 투표 가능</span><h3>${e(item.title)}</h3><p>${r.leaders.length?r.leaders.map(c=>e(c.name)).join(' · '):'아직 정해지지 않았어요. 첫 표를 남겨 주세요.'}</p><div><span class="badge ${r.kind==='waiting'||r.kind==='tie'?'pending':''}">${e(resultLabel(r,p))}</span> <span class="count-label">후보 ${r.ranked.length}곳</span></div>${button('후보 보기 · 투표하기','poll',p.id,'small')}</article>`;
+    return `<article class="card poll-summary"><span class="section-kicker">${shortDate(item.date)} · ${item.kind==='cafe'?'CAFE':'FOOD'} · 항상 투표 가능</span><h3>${e(item.title)}</h3><p>${state.publicPreview?'여행 초안에 등록된 후보를 둘러보세요.':r.leaders.length?r.leaders.map(c=>e(c.name)).join(' · '):'아직 정해지지 않았어요. 첫 표를 남겨 주세요.'}</p><div><span class="badge ${r.kind==='waiting'||r.kind==='tie'?'pending':''}">${e(state.publicPreview?'초기 후보 미리보기':resultLabel(r,p))}</span> <span class="count-label">후보 ${r.ranked.length}곳</span></div>${button(state.publicPreview?'후보 보기':'후보 보기 · 투표하기','poll',p.id,'small')}</article>`;
   }).join('')}</div>`;
 }
 function renderPoll(poll) {
-  const item=itemForPoll(poll),result=resultFor(poll),mine=state.data.votes.find(v=>v.poll_id===poll.id&&v.participant_id===me().id);
+  const item=itemForPoll(poll),result=resultFor(poll),mine=canEdit()?state.data.votes.find(v=>v.poll_id===poll.id&&v.participant_id===me().id):null;
   const total=result.ranked.reduce((n,c)=>n+c.count,0),hiddenMine=mine&&!result.ranked.some(c=>c.id===mine.candidate_id);
-  const choices=result.ranked.map((c,index)=>`<article class="card candidate ${mine?.candidate_id===c.id?'selected':''}"><div class="candidate-top"><div><span class="section-kicker">${c.count>0&&index===0?'MOST LOVED':'OPTION '+String(index+1).padStart(2,'0')}</span><h3>${e(c.name)}</h3></div><div class="votes">${c.count}<span>표</span></div></div><p>${e(c.description)}</p><div class="progress" aria-hidden="true"><span style="width:${total?c.count/total*100:0}%"></span></div><div class="candidate-bottom"><div class="candidate-meta">${c.price!=null?`<span>1인 약 ${Number(c.price).toLocaleString('ko-KR')}원</span>`:''}${link(c.url,'장소 보기')}${!c.url?'<span>지도 링크 확인 필요</span>':''}</div>${button(mine?.candidate_id===c.id?'✓ 내 선택 · 취소':'이곳에 한 표','vote',c.id,mine?.candidate_id===c.id?'primary small':'small')}</div>${c.created_by===me().id?`<div class="guest-controls" style="margin-top:12px">${button('내 추천 숨기기','hide',c.id,'small quiet')}</div>`:''}</article>`).join('');
-  return `${button('← 투표 목록','poll-back','','small quiet back-button')}<div class="poll-title"><span class="section-kicker">${shortDate(item.date)} · ${kindNames[item.kind]}</span><h2>${e(item.title)}</h2><p>${e(item.description)}</p><span class="badge ${result.kind==='tie'?'pending':''}">${e(resultLabel(result,poll))}</span></div>${hiddenMine?'<div class="notice">내가 선택했던 후보가 숨겨졌어요. 다른 후보를 선택해 주세요.</div>':''}<div class="poll-actions">${button('+ 후보 추천하기','candidate-add',poll.id,'primary')}</div><div class="candidate-list">${choices||'<div class="empty"><strong>첫 번째 추천을 기다려요.</strong>함께 가고 싶은 식당이나 카페를 후보로 추가해 주세요.</div>'}</div>${canEdit()?state.data.candidates.filter(c=>c.poll_id===poll.id&&c.hidden&&c.created_by===me().id).map(c=>`<div class="card admin-row admin-hidden" style="margin-top:12px"><strong>숨긴 후보 · ${e(c.name)}</strong>${button('다시 표시','unhide',c.id,'small')}</div>`).join(''):''}<p class="muted">${total}표 참여 · 언제든 자유롭게 변경하세요.</p>`;
+  const choices=result.ranked.map((c,index)=>`<article class="card candidate ${mine?.candidate_id===c.id?'selected':''}"><div class="candidate-top"><div><span class="section-kicker">${c.count>0&&index===0?'MOST LOVED':'OPTION '+String(index+1).padStart(2,'0')}</span><h3>${e(c.name)}</h3></div>${state.publicPreview?'<span class="badge pending">초기 후보</span>':`<div class="votes">${c.count}<span>표</span></div>`}</div><p>${e(c.description)}</p>${state.publicPreview?'':`<div class="progress" aria-hidden="true"><span style="width:${total?c.count/total*100:0}%"></span></div>`}<div class="candidate-bottom"><div class="candidate-meta">${c.price!=null?`<span>1인 약 ${Number(c.price).toLocaleString('ko-KR')}원</span>`:''}${link(c.url,'장소 보기')}${!c.url?'<span>지도 링크 확인 필요</span>':''}</div>${canEdit()?button(mine?.candidate_id===c.id?'✓ 내 선택 · 취소':'이곳에 한 표','vote',c.id,mine?.candidate_id===c.id?'primary small':'small'):''}</div>${canEdit()&&c.created_by===me().id?`<div class="guest-controls" style="margin-top:12px">${button('내 추천 숨기기','hide',c.id,'small quiet')}</div>`:''}</article>`).join('');
+  return `${button('← 투표 목록','poll-back','','small quiet back-button')}<div class="poll-title"><span class="section-kicker">${shortDate(item.date)} · ${kindNames[item.kind]}</span><h2>${e(item.title)}</h2><p>${e(item.description)}</p><span class="badge ${state.publicPreview||result.kind==='tie'?'pending':''}">${e(state.publicPreview?'초기 후보 미리보기':resultLabel(result,poll))}</span></div>${hiddenMine?'<div class="notice">내가 선택했던 후보가 숨겨졌어요. 다른 후보를 선택해 주세요.</div>':''}<div class="poll-actions">${canEdit()?button('+ 후보 추천하기','candidate-add',poll.id,'primary'):'<p class="notice">친구별 초대 링크로 입장하면 후보를 추천하고 투표할 수 있어요.</p>'}</div><div class="candidate-list">${choices||`<div class="empty"><strong>${state.publicPreview?'아직 등록된 초기 후보가 없어요.':'첫 번째 추천을 기다려요.'}</strong>${state.publicPreview?'여행에 참여한 뒤 함께 가고 싶은 곳을 추천해 주세요.':'함께 가고 싶은 식당이나 카페를 후보로 추가해 주세요.'}</div>`}</div>${canEdit()?state.data.candidates.filter(c=>c.poll_id===poll.id&&c.hidden&&c.created_by===me().id).map(c=>`<div class="card admin-row admin-hidden" style="margin-top:12px"><strong>숨긴 후보 · ${e(c.name)}</strong>${button('다시 표시','unhide',c.id,'small')}</div>`).join(''):''}<p class="muted">${state.publicPreview?'여행 초안의 후보예요. 실제 득표 결과는 초대 링크로 입장해 확인해 주세요.':`${total}표 참여 · 언제든 자유롭게 변경하세요.`}</p>`;
 }
 function renderLodgings() {
   return heading('A PLACE TO REST','우리의 숙소','밤에는 느긋하게, 내일의 여행을 준비해요.')+`<div class="lodging-grid">${state.data.lodgings.map((l,i)=>`<article class="card lodging-card"><div class="lodging-visual ${i?'suncheon':''}" aria-hidden="true"><span>${e(l.city)}</span><small>${i?'AMONG THE REEDS':'BY THE SEA'}</small></div><span class="section-kicker">NIGHT 0${i+1} · ${shortDate(l.check_in)} → ${shortDate(l.check_out)}</span><h3>${e(l.name)}</h3><span class="badge ${l.verified?'':'pending'}">${l.verified?'숙소 정보 확인됨':'예약 및 상세 정보 확인 필요'}</span><p>${e(l.notes)}</p>${link(l.url,i?'네이버 지도에서 보기':'Airbnb에서 보기','external-link')}${canEdit()?`<div style="margin-top:18px">${button('숙소 정보 수정','lodging-edit',l.id,'small')}</div>`:''}</article>`).join('')}</div>`;
@@ -122,13 +138,16 @@ async function refresh() {
   if(!state.repo)return;
   state.refreshing=true;
   try {
+    if(!state.repo.demo&&!await state.repo.hasSession()){state.error='';showPublicPreview();render();return;}
     const [data,entries]=await Promise.all([state.repo.snapshot(),state.repo.guestbook(state.limit)]);
-    state.data=data;state.entries=entries;state.clockOffset=Date.parse(data.server_time)-Date.now();state.error='';state.loading=false;
+    const wasPublic=state.publicPreview;
+    state.data=data;state.publicPreview=false;state.entries=entries;state.clockOffset=Date.parse(data.server_time)-Date.now();state.error='';state.loading=false;
     render();
+    if(wasPublic&&!state.repo.demo)subscribe();
   } catch(error) {
     state.loading=false;state.error=error.message;
     // Never keep private content visible after membership is rejected.
-    if(/권한|초대|참여|인증|permission|JWT/i.test(error.message)||!state.data){state.data=null;state.entries=[];$('#dialog').close();}
+    if(error.code==='42501'||/권한|초대|참여|인증|permission|JWT/i.test(error.message)||!state.data||state.publicPreview){showPublicPreview();}
     render();
   } finally {state.refreshing=false;if(state.refreshAgain){state.refreshAgain=false;queueMicrotask(refresh);}}
 }
@@ -137,6 +156,7 @@ function subscribe() {
   state.unsubscribe=state.repo.subscribe(()=>{clearTimeout(refreshTimer);refreshTimer=setTimeout(refresh,150);},status=>{state.realtime=status;renderConnection();});
 }
 async function write(action,payload) {
+  if(!canEdit())throw new Error('친구별 초대 링크로 먼저 입장해 주세요.');
   if(!navigator.onLine&&!state.repo.demo)throw new Error('오프라인이에요. 연결 후 저장해 주세요.');
   const result=await state.repo.mutate(action,payload);await refresh();return result;
 }
@@ -145,9 +165,9 @@ async function action(name,id,element) {
   if(name==='date'){state.date=id;render();return;}
   if(name==='poll'){state.section='votes';state.pollId=id;history.replaceState(null,'','#votes');render();$('#main').scrollIntoView({behavior:'smooth',block:'start'});return;}
   if(name==='poll-back'){state.pollId=null;render();return;}
-  if(name==='retry') {if(!state.repo){await start();return;}if(inviteToken){await state.repo.redeem(inviteToken);inviteToken=null;}await refresh();if(state.data)subscribe();return;}
-  if(name==='logout'){await state.repo.signOut();state.unsubscribe?.();state.data=null;state.entries=[];state.guestDraft='';state.section='schedule';render();return;}
-  if(!state.data)throw new Error('초대 링크로 먼저 접속해 주세요.');
+  if(name==='retry') {if(!state.repo){await start();return;}if(inviteToken){await state.repo.redeem(inviteToken);inviteToken=null;}await refresh();if(canEdit()&&!state.unsubscribe)subscribe();return;}
+  if(name==='logout'){await state.repo.signOut();state.error='';state.section='schedule';showPublicPreview();render();return;}
+  if(!canEdit())throw new Error('친구별 초대 링크로 먼저 입장해 주세요.');
   if(name==='vote') {const c=state.data.candidates.find(c=>c.id===id),old=state.data.votes.find(v=>v.poll_id===c.poll_id&&v.participant_id===me().id);await write('vote',{poll_id:c.poll_id,candidate_id:old?.candidate_id===id?null:id});toast('선택을 반영했어요.');}
   else if(name==='candidate-add')showForm('함께 갈 곳 추천하기','candidate',`${field('장소 이름','name','','text','required maxlength="80"')}${field('지도 또는 상세 링크 (선택)','url','','url')}${field('1인 예상 가격 (선택, 원)','price','','number','min="0" max="2147483647" step="1"')}${textarea('추천 이유','description')}`,id,'후보 등록하기');
   else if(name==='hide')confirmAction('후보 숨기기','이 후보의 표는 집계에서 제외돼요. 선택한 친구는 다른 후보를 골라야 해요.','hide_candidate',id,{id,hidden:true});
@@ -181,6 +201,7 @@ document.addEventListener('submit',async event=>{
   lockUi(true);const submit=form.querySelector('[type=submit]');form.querySelector('.form-error').textContent='';
   const values=Object.fromEntries(new FormData(form)),id=form.dataset.id,type=form.dataset.form;
   try{
+    if(!canEdit())throw new Error('친구별 초대 링크로 먼저 입장해 주세요.');
     let result;
     if(type==='candidate'){result=await write('candidate',{...validateCandidate(values),poll_id:id});}
     else if(type==='confirmation')await write(form.dataset.actionName,JSON.parse(form.dataset.extra));
@@ -214,14 +235,15 @@ async function start() {
   try{
     const config=window.TRIP_CONFIG||{};
     const hasUrl=Boolean(config.supabaseUrl),hasKey=Boolean(config.supabaseKey);
+    const target=location.hash.slice(1);if(['schedule','votes','lodgings','budget','guestbook','settings'].includes(target))state.section=target;
+    if(hasUrl||hasKey){showPublicPreview();render();}
     if(hasUrl!==hasKey)throw new Error('서비스 설정이 일부만 입력되어 있어요. URL과 공개 키를 모두 설정해 주세요.');
     state.repo=hasUrl?await SupabaseRepository.create(config):new DemoRepository();
     if(inviteToken&&state.repo.demo){state.error='데모에서는 실제 초대 링크 인증을 사용할 수 없어요.';inviteToken=null;toast(state.error);}
     if(inviteToken){await state.repo.redeem(inviteToken);inviteToken=null;}
-    const target=location.hash.slice(1);if(['schedule','votes','lodgings','budget','guestbook','settings'].includes(target))state.section=target;
-    await refresh();if(state.data)subscribe();
+    await refresh();if(canEdit()&&!state.unsubscribe)subscribe();
     expiryTimer=setInterval(()=>{if(document.visibilityState==='visible')refresh();},30000);
-  }catch(error){state.loading=false;state.error=error.message;render();}
+  }catch(error){state.error=error.message;showPublicPreview();render();}
 }
 window.addEventListener('pagehide',event=>{if(!event.persisted){clearInterval(expiryTimer);state.unsubscribe?.();}});
 start();

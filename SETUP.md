@@ -33,7 +33,7 @@ powershell -ExecutionPolicy Bypass -File .\Start-Preview.ps1 -Live
 
 새 서버는 Windows에서 포트를 독점 바인딩해 중복 실행을 피하고, 콘솔 로그 출력 실패 때문에 응답이 끊기지 않도록 처리한다. 기존 프로세스를 자동 종료하지 않는다. 캐시를 사용하지 않아 수정 내용이 바로 반영된다. 서버 상태는 출력 주소 뒤 `__preview_health`를 붙여 확인한다. 서버 없이 확인하려면 `preview.html`을 사용한다.
 
-직접 Python 표준 서버를 쓰려면 먼저 해당 포트가 비어 있는지 확인하고 아래처럼 실행한다. **이 방식은 실제 Supabase 설정을 사용**하므로 최초 설정 전에는 일정 대신 초대 링크 안내 또는 DB 설정 안내가 표시될 수 있다.
+직접 Python 표준 서버를 쓰려면 먼저 해당 포트가 비어 있는지 확인하고 아래처럼 실행한다. **이 방식은 실제 Supabase 설정을 사용**한다. 로그인 전에도 기본 일정·숙소·초기 후보를 볼 수 있으며, 실제 공동 편집 내용·득표·정산·방명록은 DB/Auth 최초 설정 후 친구별 초대 링크로 입장하면 보인다.
 
 ```powershell
 python -m http.server 8766 --bind 127.0.0.1 --directory docs
@@ -67,6 +67,8 @@ powershell -ExecutionPolicy Bypass -File .\Deploy.ps1 -Message "Update itinerary
 변경이 없을 때도 Actions를 다시 실행해 배포를 확인한다. 원격 main에 새 커밋이 있으면 덮어쓰지 않고 중단한다. 로컬 변경을 커밋하거나 stash한 뒤 `git pull --rebase`로 합치고 다시 실행한다. 강제 push는 사용하지 않는다. Node.js가 이미 설치돼 있으면 `npm run deploy`도 같은 실행기다.
 
 ## Supabase 최초 설정: 한 번만
+
+‘여행 데이터베이스가 아직 준비되지 않았어요’는 여행용 RPC 함수가 아직 설치되지 않았다는 뜻이다. URL·공개 키 연결과 DB 설치는 별도다. 기본 일정은 DB/Auth 설정 없이도 열람할 수 있도록 수정했으며, 미리보기의 초기 후보를 실제 득표 결과로 표시하지 않는다.
 
 프로젝트 URL과 **publishable 공개 키**는 `docs/config.js`에 이미 연결돼 있다. 확인 당시 여행 테이블/RPC가 없고 익명 로그인이 비활성화돼 있다. 공개 키로는 DB 구조나 Auth 프로젝트 설정을 바꿀 수 없으므로 아래 두 작업은 프로젝트 대시보드에서 한 번 수행한다.
 
@@ -109,9 +111,10 @@ npm run check
 npm test
 npm run test:db
 python tests/browser-shared.py
+python tests/browser-public.py
 ```
 
-브라우저 검사는 테스트용 서버를 직접 생성·종료하며 production 공개 키 대신 로컬 데모를 사용한다. Python Playwright/Chromium이 없으면 최초 설치한다.
+브라우저 검사는 테스트용 서버를 직접 생성·종료한다. `browser-shared.py`는 로컬 데모, `browser-public.py`는 인증 응답을 모의해 로그인 전 열람·DB/SDK 오류·권한 회수·로그아웃·6개 화면 너비를 검사하며 실제 Supabase 데이터를 쓰지 않는다. Python Playwright/Chromium이 없으면 최초 설치한다.
 
 ```powershell
 python -m pip install playwright

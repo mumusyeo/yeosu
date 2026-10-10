@@ -395,9 +395,18 @@
       await loadSdk();
       return new _SupabaseRepository(window.supabase.createClient(config.supabaseUrl, config.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } }), config.tripId);
     }
+    async hasSession() {
+      const { data, error } = await this.client.auth.getSession();
+      if (error) throw error;
+      return Boolean(data.session);
+    }
     async rpc(name, args) {
       const { data, error } = await this.client.rpc(name, args);
-      if (error) throw new Error(error.code === "PGRST202" ? "\uC5EC\uD589 \uB370\uC774\uD130\uBCA0\uC774\uC2A4\uAC00 \uC544\uC9C1 \uC900\uBE44\uB418\uC9C0 \uC54A\uC558\uC5B4\uC694. \uCD5C\uCD08 \uC124\uC815 \uD6C4 \uB2E4\uC2DC \uC811\uC18D\uD574 \uC8FC\uC138\uC694." : error.message);
+      if (error) {
+        const failure = new Error(error.code === "PGRST202" ? "\uC5EC\uD589 \uB370\uC774\uD130\uBCA0\uC774\uC2A4\uAC00 \uC544\uC9C1 \uC900\uBE44\uB418\uC9C0 \uC54A\uC558\uC5B4\uC694. \uCD5C\uCD08 \uC124\uC815 \uD6C4 \uB2E4\uC2DC \uC811\uC18D\uD574 \uC8FC\uC138\uC694." : error.message);
+        failure.code = error.code;
+        throw failure;
+      }
       return data;
     }
     async redeem(token) {
@@ -453,7 +462,7 @@
   var dates = ["2026-11-06", "2026-11-07", "2026-11-08"];
   var days = ["\uC5EC\uC218, \uBC14\uB2E4\uB97C \uB9CC\uB098\uB294 \uB0A0", "\uC5EC\uC218\uC5D0\uC11C \uC21C\uCC9C, \uAC00\uC744\uC744 \uB530\uB77C\uC11C", "\uC21C\uCC9C, \uB290\uAE0B\uD55C \uB9C8\uC9C0\uB9C9 \uD558\uB8E8"];
   var kindNames = { train: "TRAIN \xB7 \uAE30\uCC28", move: "ON THE ROAD \xB7 \uC774\uB3D9", food: "GOOD FOOD \xB7 \uC2DD\uC0AC", cafe: "COFFEE BREAK \xB7 \uCE74\uD398", sight: "SLOW WALK \xB7 \uAD00\uAD11", stay: "STAY \xB7 \uC219\uC18C" };
-  var state = { repo: null, data: null, entries: [], section: "schedule", date: dates[0], pollId: null, limit: 20, loading: true, error: "", busy: false, guestDraft: "", requestId: newId(), unsubscribe: null, refreshing: false, refreshAgain: false, clockOffset: 0, realtime: "" };
+  var state = { repo: null, data: null, publicPreview: false, entries: [], section: "schedule", date: dates[0], pollId: null, limit: 20, loading: true, error: "", busy: false, guestDraft: "", requestId: newId(), unsubscribe: null, refreshing: false, refreshAgain: false, clockOffset: 0, realtime: "" };
   var toastTimer;
   var refreshTimer;
   var expiryTimer;
@@ -493,6 +502,21 @@
   var fmtDate = (value) => new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
   var localDateTime = (value) => value ? new Date(new Date(value).getTime() + 9 * 36e5).toISOString().slice(0, 16) : "";
   var fromKst = (value) => value ? (/* @__PURE__ */ new Date(`${value}:00+09:00`)).toISOString() : null;
+  function showPublicPreview() {
+    const seed = createSeed();
+    state.data = { trip: seed.trip, schedule: seed.schedule, lodgings: seed.lodgings, polls: seed.polls, candidates: seed.candidates, votes: [], participants: [], invitations: [], expenses: [], expense_splits: [], me: null };
+    state.publicPreview = true;
+    state.entries = [];
+    state.guestDraft = "";
+    state.clockOffset = 0;
+    state.loading = false;
+    state.unsubscribe?.();
+    state.unsubscribe = null;
+    $("#dialog").close();
+  }
+  function participationNotice(title) {
+    return `<section class="gate card"><span class="section-kicker">JOIN THE TRIP</span><h2>${escapeHtml(title)}</h2><p>\uCE5C\uAD6C\uBCC4 \uCD08\uB300 \uB9C1\uD06C\uB85C \uC785\uC7A5\uD558\uBA74 \uD568\uAED8 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC5B4\uC694. \uAE30\uBCF8 \uC77C\uC815\uACFC \uC219\uC18C\uB294 \uC9C0\uAE08\uB3C4 \uB458\uB7EC\uBCFC \uC218 \uC788\uC5B4\uC694.</p><div class="gate-buttons">${button("\uB2E4\uC2DC \uC5F0\uACB0\uD558\uAE30", "retry", "", "small")}</div></section>`;
+  }
   function renderConnection() {
     const el = $("#connection");
     if (state.repo?.demo) {
@@ -500,8 +524,13 @@
       const people = state.data?.participants || state.repo.read().participants;
       el.innerHTML = `<strong>\uB370\uBAA8 \xB7 \uB2E4\uB978 \uC0AC\uB78C\uACFC \uACF5\uC720\uB418\uC9C0 \uC54A\uC74C</strong> <span>\uC774 \uBE0C\uB77C\uC6B0\uC800\uC5D0\uC11C\uB9CC \uC800\uC7A5\uB3FC\uC694.</span><label> \uCCB4\uD5D8\uD560 \uCC38\uC5EC\uC790<select id="demo-person" aria-label="\uB370\uBAA8 \uCC38\uC5EC\uC790">${people.filter((p) => p.active).map((p) => `<option value="${escapeHtml(p.id)}" ${p.id === state.repo.participantId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}</select></label>`;
     } else {
-      el.className = `connection ${state.error ? "error" : ""}`;
-      el.textContent = state.error || (!navigator.onLine ? "\uC624\uD504\uB77C\uC778\uC774\uC5D0\uC694. \uC5F0\uACB0 \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694." : state.data ? state.realtime === "SUBSCRIBED" ? "\uCE5C\uAD6C\uB4E4\uACFC \uC2E4\uC2DC\uAC04\uC73C\uB85C \uD568\uAED8 \uB9CC\uB4DC\uB294 \uC5EC\uD589" : "\uC5EC\uD589 \uC5F0\uACB0\uB428 \xB7 \uC2E4\uC2DC\uAC04 \uC5F0\uACB0\uC744 \uBCF5\uAD6C\uD558\uACE0 \uC788\uC5B4\uC694" : "\uCE5C\uAD6C\uBCC4 \uCD08\uB300 \uB9C1\uD06C\uB85C \uC811\uC18D\uD574 \uC8FC\uC138\uC694.");
+      if (state.publicPreview) {
+        el.className = "connection";
+        el.innerHTML = `<strong>\uAE30\uBCF8 \uC77C\uC815 \uBBF8\uB9AC\uBCF4\uAE30</strong> <span>\uACF5\uB3D9 \uD3B8\uC9D1 \uB0B4\uC6A9\uACFC \uD22C\uD45C \uACB0\uACFC\uB294 \uCE5C\uAD6C\uBCC4 \uCD08\uB300 \uB9C1\uD06C\uB85C \uC785\uC7A5\uD574 \uD655\uC778\uD574 \uC8FC\uC138\uC694.</span>${state.error ? `<span>${escapeHtml(state.error)}</span>` : ""}`;
+      } else {
+        el.className = `connection ${state.error ? "error" : ""}`;
+        el.textContent = state.error || (!navigator.onLine ? "\uC624\uD504\uB77C\uC778\uC774\uC5D0\uC694. \uC5F0\uACB0 \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694." : state.data ? state.realtime === "SUBSCRIBED" ? "\uCE5C\uAD6C\uB4E4\uACFC \uC2E4\uC2DC\uAC04\uC73C\uB85C \uD568\uAED8 \uB9CC\uB4DC\uB294 \uC5EC\uD589" : "\uC5EC\uD589 \uC5F0\uACB0\uB428 \xB7 \uC2E4\uC2DC\uAC04 \uC5F0\uACB0\uC744 \uBCF5\uAD6C\uD558\uACE0 \uC788\uC5B4\uC694" : "\uCE5C\uAD6C\uBCC4 \uCD08\uB300 \uB9C1\uD06C\uB85C \uC811\uC18D\uD574 \uC8FC\uC138\uC694.");
+      }
     }
     $("#identity").innerHTML = me() ? `<span class="avatar" aria-hidden="true">${escapeHtml(me().name.slice(0, 1))}</span><span>${escapeHtml(me().name)}</span>${state.repo.demo ? "" : button("\uB85C\uADF8\uC544\uC6C3", "logout", "", "small quiet")}` : '<span class="muted">\uD568\uAED8 \uB9CC\uB4DC\uB294 \uC5EC\uD589</span>';
   }
@@ -529,8 +558,8 @@
     if (state.section === "schedule") $("#main").innerHTML = renderSchedule();
     else if (state.section === "votes") $("#main").innerHTML = state.pollId && pollById(state.pollId) ? renderPoll(pollById(state.pollId)) : renderVotes();
     else if (state.section === "lodgings") $("#main").innerHTML = renderLodgings();
-    else if (state.section === "guestbook") $("#main").innerHTML = renderGuestbook();
-    else if (state.section === "budget") $("#main").innerHTML = renderBudget(state.data, me());
+    else if (state.section === "guestbook") $("#main").innerHTML = canEdit() ? renderGuestbook() : participationNotice("\uCE5C\uAD6C\uB4E4\uACFC \uC5EC\uD589 \uC774\uC57C\uAE30\uB97C \uB098\uB220\uC694");
+    else if (state.section === "budget") $("#main").innerHTML = canEdit() ? renderBudget(state.data, me()) : participationNotice("\uC608\uC0B0\uACFC \uC815\uC0B0\uC740 \uD568\uAED8 \uB5A0\uB098\uB294 \uCE5C\uAD6C\uB4E4\uC5D0\uAC8C");
     else if (state.section === "settings" && canEdit()) $("#main").innerHTML = renderSettings();
     else {
       state.section = "schedule";
@@ -545,20 +574,20 @@
       const poll = state.data.polls.find((p) => p.schedule_id === item.id), result = poll ? resultFor(poll) : null;
       const title = result?.leaders.length ? result.leaders.map((c) => escapeHtml(c.name)).join(" \xB7 ") : escapeHtml(item.title);
       const lodging = state.data.lodgings.find((l) => l.id === item.lodging_id);
-      return `<article class="schedule-row"><div class="time">${item.start_time ? `${escapeHtml(item.start_time.slice(0, 5))}${item.end_time ? `<br>\u2193 ${escapeHtml(item.end_time.slice(0, 5))}` : ""}` : "\uC2DC\uAC04 \uBBF8\uC815"}</div><div class="card schedule-card ${poll ? "vote-card" : ""}"><div><span class="kind-label">${kindNames[item.kind] || "TRIP"}</span>${poll ? `<span class="visually-hidden">${escapeHtml(item.title)}</span>` : ""}<h4>${title}</h4><p>${escapeHtml(item.description)}</p>${poll ? `<span class="badge ${result.kind === "waiting" || result.kind === "tie" ? "pending" : ""}">${escapeHtml(resultLabel(result, poll))}</span>` : `<span class="badge ${item.verified ? "" : "pending"}">${item.verified ? "\uD655\uC778\uB41C \uC77C\uC815" : "\uC77C\uC815 \uCD08\uC548"}</span>`}${lodging ? `<br>${link(lodging.url, "\uC219\uC18C \uC790\uC138\uD788 \uBCF4\uAE30", "external-link")}` : ""}</div>${poll ? button("\uD6C4\uBCF4 \uBCF4\uAE30 \xB7 \uD22C\uD45C", "poll", poll.id, "small") : canEdit() ? button("\uC218\uC815", "schedule-edit", item.id, "small quiet") : ""}</div></article>`;
+      return `<article class="schedule-row"><div class="time">${item.start_time ? `${escapeHtml(item.start_time.slice(0, 5))}${item.end_time ? `<br>\u2193 ${escapeHtml(item.end_time.slice(0, 5))}` : ""}` : "\uC2DC\uAC04 \uBBF8\uC815"}</div><div class="card schedule-card ${poll ? "vote-card" : ""}"><div><span class="kind-label">${kindNames[item.kind] || "TRIP"}</span>${poll ? `<span class="visually-hidden">${escapeHtml(item.title)}</span>` : ""}<h4>${title}</h4><p>${escapeHtml(item.description)}</p>${poll ? `<span class="badge ${result.kind === "waiting" || result.kind === "tie" ? "pending" : ""}">${escapeHtml(state.publicPreview ? "\uCD08\uAE30 \uD6C4\uBCF4 \uBBF8\uB9AC\uBCF4\uAE30" : resultLabel(result, poll))}</span>` : `<span class="badge ${item.verified ? "" : "pending"}">${item.verified ? "\uD655\uC778\uB41C \uC77C\uC815" : "\uC77C\uC815 \uCD08\uC548"}</span>`}${lodging ? `<br>${link(lodging.url, "\uC219\uC18C \uC790\uC138\uD788 \uBCF4\uAE30", "external-link")}` : ""}</div>${poll ? button(state.publicPreview ? "\uD6C4\uBCF4 \uBCF4\uAE30" : "\uD6C4\uBCF4 \uBCF4\uAE30 \xB7 \uD22C\uD45C", "poll", poll.id, "small") : canEdit() ? button("\uC218\uC815", "schedule-edit", item.id, "small quiet") : ""}</div></article>`;
     }).join("")}</div>`;
   }
   function renderVotes() {
-    return heading("GOOD FOOD, GOOD COMPANY", "\uBA39\uACE0 \uC2F6\uC740 \uACF3, \uD55C \uD45C", "\uCE5C\uAD6C\uB4E4\uC774 \uD6C4\uBCF4\uB97C \uB354\uD558\uACE0, \uAC00\uC7A5 \uB9CE\uC740 \uD45C\uB97C \uBC1B\uC740 \uACF3\uC774 \uC77C\uC815\uD45C\uC5D0 \uBCF4\uC5EC\uC694.") + `<div class="notice">\uC77C\uC815\uB9C8\uB2E4 \uD55C \uC0AC\uB78C\uB2F9 \uD55C \uD45C. \uC5B8\uC81C\uB4E0 \uC120\uD0DD\uC744 \uBC14\uAFB8\uAC70\uB098 \uCDE8\uC18C\uD560 \uC218 \uC788\uACE0 \uD604\uC7AC \uCD5C\uB2E4 \uB4DD\uD45C\uAC00 \uC77C\uC815\uD45C\uC5D0 \uBC18\uC601\uB3FC\uC694.</div><div class="vote-grid">${state.data.polls.map((p) => {
+    return heading("GOOD FOOD, GOOD COMPANY", "\uBA39\uACE0 \uC2F6\uC740 \uACF3, \uD55C \uD45C", "\uCE5C\uAD6C\uB4E4\uC774 \uD6C4\uBCF4\uB97C \uB354\uD558\uACE0, \uAC00\uC7A5 \uB9CE\uC740 \uD45C\uB97C \uBC1B\uC740 \uACF3\uC774 \uC77C\uC815\uD45C\uC5D0 \uBCF4\uC5EC\uC694.") + `<div class="notice">${state.publicPreview ? "\uAE30\uBCF8 \uD6C4\uBCF4 \uBBF8\uB9AC\uBCF4\uAE30\uC608\uC694. \uC2E4\uC81C \uD22C\uD45C \uACB0\uACFC \uD655\uC778\uACFC \uD6C4\uBCF4 \uCD94\uCC9C\uC740 \uCE5C\uAD6C\uBCC4 \uCD08\uB300 \uB9C1\uD06C\uB85C \uC785\uC7A5\uD55C \uB4A4 \uAC00\uB2A5\uD574\uC694." : "\uC77C\uC815\uB9C8\uB2E4 \uD55C \uC0AC\uB78C\uB2F9 \uD55C \uD45C. \uC5B8\uC81C\uB4E0 \uC120\uD0DD\uC744 \uBC14\uAFB8\uAC70\uB098 \uCDE8\uC18C\uD560 \uC218 \uC788\uACE0 \uD604\uC7AC \uCD5C\uB2E4 \uB4DD\uD45C\uAC00 \uC77C\uC815\uD45C\uC5D0 \uBC18\uC601\uB3FC\uC694."}</div><div class="vote-grid">${state.data.polls.map((p) => {
       const item = itemForPoll(p), r = resultFor(p);
-      return `<article class="card poll-summary"><span class="section-kicker">${shortDate(item.date)} \xB7 ${item.kind === "cafe" ? "CAFE" : "FOOD"} \xB7 \uD56D\uC0C1 \uD22C\uD45C \uAC00\uB2A5</span><h3>${escapeHtml(item.title)}</h3><p>${r.leaders.length ? r.leaders.map((c) => escapeHtml(c.name)).join(" \xB7 ") : "\uC544\uC9C1 \uC815\uD574\uC9C0\uC9C0 \uC54A\uC558\uC5B4\uC694. \uCCAB \uD45C\uB97C \uB0A8\uACA8 \uC8FC\uC138\uC694."}</p><div><span class="badge ${r.kind === "waiting" || r.kind === "tie" ? "pending" : ""}">${escapeHtml(resultLabel(r, p))}</span> <span class="count-label">\uD6C4\uBCF4 ${r.ranked.length}\uACF3</span></div>${button("\uD6C4\uBCF4 \uBCF4\uAE30 \xB7 \uD22C\uD45C\uD558\uAE30", "poll", p.id, "small")}</article>`;
+      return `<article class="card poll-summary"><span class="section-kicker">${shortDate(item.date)} \xB7 ${item.kind === "cafe" ? "CAFE" : "FOOD"} \xB7 \uD56D\uC0C1 \uD22C\uD45C \uAC00\uB2A5</span><h3>${escapeHtml(item.title)}</h3><p>${state.publicPreview ? "\uC5EC\uD589 \uCD08\uC548\uC5D0 \uB4F1\uB85D\uB41C \uD6C4\uBCF4\uB97C \uB458\uB7EC\uBCF4\uC138\uC694." : r.leaders.length ? r.leaders.map((c) => escapeHtml(c.name)).join(" \xB7 ") : "\uC544\uC9C1 \uC815\uD574\uC9C0\uC9C0 \uC54A\uC558\uC5B4\uC694. \uCCAB \uD45C\uB97C \uB0A8\uACA8 \uC8FC\uC138\uC694."}</p><div><span class="badge ${r.kind === "waiting" || r.kind === "tie" ? "pending" : ""}">${escapeHtml(state.publicPreview ? "\uCD08\uAE30 \uD6C4\uBCF4 \uBBF8\uB9AC\uBCF4\uAE30" : resultLabel(r, p))}</span> <span class="count-label">\uD6C4\uBCF4 ${r.ranked.length}\uACF3</span></div>${button(state.publicPreview ? "\uD6C4\uBCF4 \uBCF4\uAE30" : "\uD6C4\uBCF4 \uBCF4\uAE30 \xB7 \uD22C\uD45C\uD558\uAE30", "poll", p.id, "small")}</article>`;
     }).join("")}</div>`;
   }
   function renderPoll(poll) {
-    const item = itemForPoll(poll), result = resultFor(poll), mine = state.data.votes.find((v) => v.poll_id === poll.id && v.participant_id === me().id);
+    const item = itemForPoll(poll), result = resultFor(poll), mine = canEdit() ? state.data.votes.find((v) => v.poll_id === poll.id && v.participant_id === me().id) : null;
     const total = result.ranked.reduce((n, c) => n + c.count, 0), hiddenMine = mine && !result.ranked.some((c) => c.id === mine.candidate_id);
-    const choices = result.ranked.map((c, index) => `<article class="card candidate ${mine?.candidate_id === c.id ? "selected" : ""}"><div class="candidate-top"><div><span class="section-kicker">${c.count > 0 && index === 0 ? "MOST LOVED" : "OPTION " + String(index + 1).padStart(2, "0")}</span><h3>${escapeHtml(c.name)}</h3></div><div class="votes">${c.count}<span>\uD45C</span></div></div><p>${escapeHtml(c.description)}</p><div class="progress" aria-hidden="true"><span style="width:${total ? c.count / total * 100 : 0}%"></span></div><div class="candidate-bottom"><div class="candidate-meta">${c.price != null ? `<span>1\uC778 \uC57D ${Number(c.price).toLocaleString("ko-KR")}\uC6D0</span>` : ""}${link(c.url, "\uC7A5\uC18C \uBCF4\uAE30")}${!c.url ? "<span>\uC9C0\uB3C4 \uB9C1\uD06C \uD655\uC778 \uD544\uC694</span>" : ""}</div>${button(mine?.candidate_id === c.id ? "\u2713 \uB0B4 \uC120\uD0DD \xB7 \uCDE8\uC18C" : "\uC774\uACF3\uC5D0 \uD55C \uD45C", "vote", c.id, mine?.candidate_id === c.id ? "primary small" : "small")}</div>${c.created_by === me().id ? `<div class="guest-controls" style="margin-top:12px">${button("\uB0B4 \uCD94\uCC9C \uC228\uAE30\uAE30", "hide", c.id, "small quiet")}</div>` : ""}</article>`).join("");
-    return `${button("\u2190 \uD22C\uD45C \uBAA9\uB85D", "poll-back", "", "small quiet back-button")}<div class="poll-title"><span class="section-kicker">${shortDate(item.date)} \xB7 ${kindNames[item.kind]}</span><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.description)}</p><span class="badge ${result.kind === "tie" ? "pending" : ""}">${escapeHtml(resultLabel(result, poll))}</span></div>${hiddenMine ? '<div class="notice">\uB0B4\uAC00 \uC120\uD0DD\uD588\uB358 \uD6C4\uBCF4\uAC00 \uC228\uACA8\uC84C\uC5B4\uC694. \uB2E4\uB978 \uD6C4\uBCF4\uB97C \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.</div>' : ""}<div class="poll-actions">${button("+ \uD6C4\uBCF4 \uCD94\uCC9C\uD558\uAE30", "candidate-add", poll.id, "primary")}</div><div class="candidate-list">${choices || '<div class="empty"><strong>\uCCAB \uBC88\uC9F8 \uCD94\uCC9C\uC744 \uAE30\uB2E4\uB824\uC694.</strong>\uD568\uAED8 \uAC00\uACE0 \uC2F6\uC740 \uC2DD\uB2F9\uC774\uB098 \uCE74\uD398\uB97C \uD6C4\uBCF4\uB85C \uCD94\uAC00\uD574 \uC8FC\uC138\uC694.</div>'}</div>${canEdit() ? state.data.candidates.filter((c) => c.poll_id === poll.id && c.hidden && c.created_by === me().id).map((c) => `<div class="card admin-row admin-hidden" style="margin-top:12px"><strong>\uC228\uAE34 \uD6C4\uBCF4 \xB7 ${escapeHtml(c.name)}</strong>${button("\uB2E4\uC2DC \uD45C\uC2DC", "unhide", c.id, "small")}</div>`).join("") : ""}<p class="muted">${total}\uD45C \uCC38\uC5EC \xB7 \uC5B8\uC81C\uB4E0 \uC790\uC720\uB86D\uAC8C \uBCC0\uACBD\uD558\uC138\uC694.</p>`;
+    const choices = result.ranked.map((c, index) => `<article class="card candidate ${mine?.candidate_id === c.id ? "selected" : ""}"><div class="candidate-top"><div><span class="section-kicker">${c.count > 0 && index === 0 ? "MOST LOVED" : "OPTION " + String(index + 1).padStart(2, "0")}</span><h3>${escapeHtml(c.name)}</h3></div>${state.publicPreview ? '<span class="badge pending">\uCD08\uAE30 \uD6C4\uBCF4</span>' : `<div class="votes">${c.count}<span>\uD45C</span></div>`}</div><p>${escapeHtml(c.description)}</p>${state.publicPreview ? "" : `<div class="progress" aria-hidden="true"><span style="width:${total ? c.count / total * 100 : 0}%"></span></div>`}<div class="candidate-bottom"><div class="candidate-meta">${c.price != null ? `<span>1\uC778 \uC57D ${Number(c.price).toLocaleString("ko-KR")}\uC6D0</span>` : ""}${link(c.url, "\uC7A5\uC18C \uBCF4\uAE30")}${!c.url ? "<span>\uC9C0\uB3C4 \uB9C1\uD06C \uD655\uC778 \uD544\uC694</span>" : ""}</div>${canEdit() ? button(mine?.candidate_id === c.id ? "\u2713 \uB0B4 \uC120\uD0DD \xB7 \uCDE8\uC18C" : "\uC774\uACF3\uC5D0 \uD55C \uD45C", "vote", c.id, mine?.candidate_id === c.id ? "primary small" : "small") : ""}</div>${canEdit() && c.created_by === me().id ? `<div class="guest-controls" style="margin-top:12px">${button("\uB0B4 \uCD94\uCC9C \uC228\uAE30\uAE30", "hide", c.id, "small quiet")}</div>` : ""}</article>`).join("");
+    return `${button("\u2190 \uD22C\uD45C \uBAA9\uB85D", "poll-back", "", "small quiet back-button")}<div class="poll-title"><span class="section-kicker">${shortDate(item.date)} \xB7 ${kindNames[item.kind]}</span><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.description)}</p><span class="badge ${state.publicPreview || result.kind === "tie" ? "pending" : ""}">${escapeHtml(state.publicPreview ? "\uCD08\uAE30 \uD6C4\uBCF4 \uBBF8\uB9AC\uBCF4\uAE30" : resultLabel(result, poll))}</span></div>${hiddenMine ? '<div class="notice">\uB0B4\uAC00 \uC120\uD0DD\uD588\uB358 \uD6C4\uBCF4\uAC00 \uC228\uACA8\uC84C\uC5B4\uC694. \uB2E4\uB978 \uD6C4\uBCF4\uB97C \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.</div>' : ""}<div class="poll-actions">${canEdit() ? button("+ \uD6C4\uBCF4 \uCD94\uCC9C\uD558\uAE30", "candidate-add", poll.id, "primary") : '<p class="notice">\uCE5C\uAD6C\uBCC4 \uCD08\uB300 \uB9C1\uD06C\uB85C \uC785\uC7A5\uD558\uBA74 \uD6C4\uBCF4\uB97C \uCD94\uCC9C\uD558\uACE0 \uD22C\uD45C\uD560 \uC218 \uC788\uC5B4\uC694.</p>'}</div><div class="candidate-list">${choices || `<div class="empty"><strong>${state.publicPreview ? "\uC544\uC9C1 \uB4F1\uB85D\uB41C \uCD08\uAE30 \uD6C4\uBCF4\uAC00 \uC5C6\uC5B4\uC694." : "\uCCAB \uBC88\uC9F8 \uCD94\uCC9C\uC744 \uAE30\uB2E4\uB824\uC694."}</strong>${state.publicPreview ? "\uC5EC\uD589\uC5D0 \uCC38\uC5EC\uD55C \uB4A4 \uD568\uAED8 \uAC00\uACE0 \uC2F6\uC740 \uACF3\uC744 \uCD94\uCC9C\uD574 \uC8FC\uC138\uC694." : "\uD568\uAED8 \uAC00\uACE0 \uC2F6\uC740 \uC2DD\uB2F9\uC774\uB098 \uCE74\uD398\uB97C \uD6C4\uBCF4\uB85C \uCD94\uAC00\uD574 \uC8FC\uC138\uC694."}</div>`}</div>${canEdit() ? state.data.candidates.filter((c) => c.poll_id === poll.id && c.hidden && c.created_by === me().id).map((c) => `<div class="card admin-row admin-hidden" style="margin-top:12px"><strong>\uC228\uAE34 \uD6C4\uBCF4 \xB7 ${escapeHtml(c.name)}</strong>${button("\uB2E4\uC2DC \uD45C\uC2DC", "unhide", c.id, "small")}</div>`).join("") : ""}<p class="muted">${state.publicPreview ? "\uC5EC\uD589 \uCD08\uC548\uC758 \uD6C4\uBCF4\uC608\uC694. \uC2E4\uC81C \uB4DD\uD45C \uACB0\uACFC\uB294 \uCD08\uB300 \uB9C1\uD06C\uB85C \uC785\uC7A5\uD574 \uD655\uC778\uD574 \uC8FC\uC138\uC694." : `${total}\uD45C \uCC38\uC5EC \xB7 \uC5B8\uC81C\uB4E0 \uC790\uC720\uB86D\uAC8C \uBCC0\uACBD\uD558\uC138\uC694.`}</p>`;
   }
   function renderLodgings() {
     return heading("A PLACE TO REST", "\uC6B0\uB9AC\uC758 \uC219\uC18C", "\uBC24\uC5D0\uB294 \uB290\uAE0B\uD558\uAC8C, \uB0B4\uC77C\uC758 \uC5EC\uD589\uC744 \uC900\uBE44\uD574\uC694.") + `<div class="lodging-grid">${state.data.lodgings.map((l, i) => `<article class="card lodging-card"><div class="lodging-visual ${i ? "suncheon" : ""}" aria-hidden="true"><span>${escapeHtml(l.city)}</span><small>${i ? "AMONG THE REEDS" : "BY THE SEA"}</small></div><span class="section-kicker">NIGHT 0${i + 1} \xB7 ${shortDate(l.check_in)} \u2192 ${shortDate(l.check_out)}</span><h3>${escapeHtml(l.name)}</h3><span class="badge ${l.verified ? "" : "pending"}">${l.verified ? "\uC219\uC18C \uC815\uBCF4 \uD655\uC778\uB428" : "\uC608\uC57D \uBC0F \uC0C1\uC138 \uC815\uBCF4 \uD655\uC778 \uD544\uC694"}</span><p>${escapeHtml(l.notes)}</p>${link(l.url, i ? "\uB124\uC774\uBC84 \uC9C0\uB3C4\uC5D0\uC11C \uBCF4\uAE30" : "Airbnb\uC5D0\uC11C \uBCF4\uAE30", "external-link")}${canEdit() ? `<div style="margin-top:18px">${button("\uC219\uC18C \uC815\uBCF4 \uC218\uC815", "lodging-edit", l.id, "small")}</div>` : ""}</article>`).join("")}</div>`;
@@ -609,20 +638,27 @@
     if (!state.repo) return;
     state.refreshing = true;
     try {
+      if (!state.repo.demo && !await state.repo.hasSession()) {
+        state.error = "";
+        showPublicPreview();
+        render();
+        return;
+      }
       const [data, entries] = await Promise.all([state.repo.snapshot(), state.repo.guestbook(state.limit)]);
+      const wasPublic = state.publicPreview;
       state.data = data;
+      state.publicPreview = false;
       state.entries = entries;
       state.clockOffset = Date.parse(data.server_time) - Date.now();
       state.error = "";
       state.loading = false;
       render();
+      if (wasPublic && !state.repo.demo) subscribe();
     } catch (error) {
       state.loading = false;
       state.error = error.message;
-      if (/권한|초대|참여|인증|permission|JWT/i.test(error.message) || !state.data) {
-        state.data = null;
-        state.entries = [];
-        $("#dialog").close();
+      if (error.code === "42501" || /권한|초대|참여|인증|permission|JWT/i.test(error.message) || !state.data || state.publicPreview) {
+        showPublicPreview();
       }
       render();
     } finally {
@@ -644,6 +680,7 @@
     });
   }
   async function write(action2, payload) {
+    if (!canEdit()) throw new Error("\uCE5C\uAD6C\uBCC4 \uCD08\uB300 \uB9C1\uD06C\uB85C \uBA3C\uC800 \uC785\uC7A5\uD574 \uC8FC\uC138\uC694.");
     if (!navigator.onLine && !state.repo.demo) throw new Error("\uC624\uD504\uB77C\uC778\uC774\uC5D0\uC694. \uC5F0\uACB0 \uD6C4 \uC800\uC7A5\uD574 \uC8FC\uC138\uC694.");
     const result = await state.repo.mutate(action2, payload);
     await refresh();
@@ -682,20 +719,18 @@
         inviteToken = null;
       }
       await refresh();
-      if (state.data) subscribe();
+      if (canEdit() && !state.unsubscribe) subscribe();
       return;
     }
     if (name === "logout") {
       await state.repo.signOut();
-      state.unsubscribe?.();
-      state.data = null;
-      state.entries = [];
-      state.guestDraft = "";
+      state.error = "";
       state.section = "schedule";
+      showPublicPreview();
       render();
       return;
     }
-    if (!state.data) throw new Error("\uCD08\uB300 \uB9C1\uD06C\uB85C \uBA3C\uC800 \uC811\uC18D\uD574 \uC8FC\uC138\uC694.");
+    if (!canEdit()) throw new Error("\uCE5C\uAD6C\uBCC4 \uCD08\uB300 \uB9C1\uD06C\uB85C \uBA3C\uC800 \uC785\uC7A5\uD574 \uC8FC\uC138\uC694.");
     if (name === "vote") {
       const c = state.data.candidates.find((c2) => c2.id === id), old = state.data.votes.find((v) => v.poll_id === c.poll_id && v.participant_id === me().id);
       await write("vote", { poll_id: c.poll_id, candidate_id: old?.candidate_id === id ? null : id });
@@ -774,6 +809,7 @@
     form.querySelector(".form-error").textContent = "";
     const values = Object.fromEntries(new FormData(form)), id = form.dataset.id, type = form.dataset.form;
     try {
+      if (!canEdit()) throw new Error("\uCE5C\uAD6C\uBCC4 \uCD08\uB300 \uB9C1\uD06C\uB85C \uBA3C\uC800 \uC785\uC7A5\uD574 \uC8FC\uC138\uC694.");
       let result;
       if (type === "candidate") {
         result = await write("candidate", { ...validateCandidate(values), poll_id: id });
@@ -856,6 +892,12 @@
     try {
       const config = window.TRIP_CONFIG || {};
       const hasUrl = Boolean(config.supabaseUrl), hasKey = Boolean(config.supabaseKey);
+      const target = location.hash.slice(1);
+      if (["schedule", "votes", "lodgings", "budget", "guestbook", "settings"].includes(target)) state.section = target;
+      if (hasUrl || hasKey) {
+        showPublicPreview();
+        render();
+      }
       if (hasUrl !== hasKey) throw new Error("\uC11C\uBE44\uC2A4 \uC124\uC815\uC774 \uC77C\uBD80\uB9CC \uC785\uB825\uB418\uC5B4 \uC788\uC5B4\uC694. URL\uACFC \uACF5\uAC1C \uD0A4\uB97C \uBAA8\uB450 \uC124\uC815\uD574 \uC8FC\uC138\uC694.");
       state.repo = hasUrl ? await SupabaseRepository.create(config) : new DemoRepository();
       if (inviteToken && state.repo.demo) {
@@ -867,16 +909,14 @@
         await state.repo.redeem(inviteToken);
         inviteToken = null;
       }
-      const target = location.hash.slice(1);
-      if (["schedule", "votes", "lodgings", "budget", "guestbook", "settings"].includes(target)) state.section = target;
       await refresh();
-      if (state.data) subscribe();
+      if (canEdit() && !state.unsubscribe) subscribe();
       expiryTimer = setInterval(() => {
         if (document.visibilityState === "visible") refresh();
       }, 3e4);
     } catch (error) {
-      state.loading = false;
       state.error = error.message;
+      showPublicPreview();
       render();
     }
   }

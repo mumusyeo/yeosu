@@ -16,7 +16,7 @@ powershell -ExecutionPolicy Bypass -File .\Deploy.ps1
 powershell -ExecutionPolicy Bypass -File .\Start-Preview.ps1
 ```
 
-**공유 기능을 켜려면 Supabase 최초 설정이 필요하다.** [SETUP.md](SETUP.md)의 SQL 실행과 익명 로그인 활성화 두 단계를 완료한다. 공개 키는 이미 연결돼 있다.
+**기본 일정·숙소·초기 후보는 바로 열람할 수 있다.** 실제 투표·정산·방명록 공유에는 [SETUP.md](SETUP.md)의 SQL 실행과 익명 로그인 활성화가 필요하다. 공개 키는 이미 연결돼 있다.
 
 - [요구사항과 원본 사진 정보](PRD.md)
 - [실행·Supabase 설정·배포·문제 해결](SETUP.md)

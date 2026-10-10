@@ -128,7 +128,8 @@ export class SupabaseRepository {
     await loadSdk();
     return new SupabaseRepository(window.supabase.createClient(config.supabaseUrl,config.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}}),config.tripId);
   }
-  async rpc(name,args) { const {data,error}=await this.client.rpc(name,args);if(error) throw new Error(error.code==='PGRST202'?'여행 데이터베이스가 아직 준비되지 않았어요. 최초 설정 후 다시 접속해 주세요.':error.message);return data; }
+  async hasSession() { const {data,error}=await this.client.auth.getSession();if(error)throw error;return Boolean(data.session); }
+  async rpc(name,args) { const {data,error}=await this.client.rpc(name,args);if(error){const failure=new Error(error.code==='PGRST202'?'여행 데이터베이스가 아직 준비되지 않았어요. 최초 설정 후 다시 접속해 주세요.':error.message);failure.code=error.code;throw failure;}return data; }
   async redeem(token) {
     const {data,error}=await this.client.auth.getSession();if(error) throw error;
     if(!data.session) {const response=await this.client.auth.signInAnonymously();if(response.error) throw new Error(response.error.code==='anonymous_provider_disabled'?'초대 링크 로그인을 아직 사용할 수 없어요. Supabase에서 익명 로그인을 켜 주세요.':response.error.message);}
