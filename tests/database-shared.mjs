@@ -105,7 +105,7 @@ await db.close();
 await check('setup creates the common URL without tokens and safely repeats without overwriting edits',async()=>{
   const fresh=new PGlite();await fresh.exec(authStub);const setup=read('setup.sql'),results=await fresh.exec(setup);
   assert.equal(results.at(-1).rows[0].invitation_url,'https://mumusyeo.github.io/yeosu/');
-  await fresh.exec('set role anon');const data=(await fresh.query('select public.trip_snapshot($1) data',[trip])).rows[0].data;assert.equal(data.schedule.length,22);assert.deepEqual(data.participants.map(p=>p.name),seed.participants.map(p=>p.name));assert.equal(data.lodgings[1].name,'온녘');
+  await fresh.exec('set role anon');const data=(await fresh.query('select public.trip_snapshot($1) data',[trip])).rows[0].data;assert.equal(data.schedule.length,22);assert.deepEqual(data.participants.map(p=>p.name),seed.participants.map(p=>p.name));assert.equal(data.lodgings[1].name,'온녘');assert.match(data.lodgings[0].notes,/송시길 19 · 체크인 15:00 · 체크아웃 11:00/);assert.match(data.lodgings[1].notes,/체크인 15:00 · 체크아웃 12:00/);assert.equal(data.schedule.find(s=>s.id===seed.schedule[17].id).start_time,'12:00:00');
   await fresh.exec('reset role');await fresh.query('update public.schedule_items set title=$1 where id=$2',['기존 수정',seed.schedule[0].id]);
   await fresh.exec(setup);assert.equal((await fresh.query('select title from public.schedule_items where id=$1',[seed.schedule[0].id])).rows[0].title,'기존 수정');await fresh.close();
 });
