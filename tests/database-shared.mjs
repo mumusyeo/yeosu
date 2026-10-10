@@ -8,6 +8,8 @@ const authStub=`create role anon;create role authenticated;create schema auth;cr
 create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`;
 const db=new PGlite();await db.exec(authStub);
 for(const file of ['migrations/001_trip.sql','migrations/002_shared_expenses.sql','seed.sql'])await db.exec(read(file));
+// Model the roster in the previous release before applying the nickname migration.
+await db.exec("update public.participants set name='친구 '||right(id::text,1)");
 const seed=createSeed(),trip=seed.trip.id,poll=seed.polls[0],[a,b]=seed.candidates;
 await db.query('insert into public.votes(trip_id,poll_id,participant_id,candidate_id) values($1,$2,$3,$4)',[trip,poll.id,seed.participants[0].id,a.id]);
 await db.exec(read('migrations/003_nickname_board.sql'));
@@ -85,11 +87,16 @@ await check('raw writes and other trips remain blocked; empty nickname cannot by
   await assert.rejects(()=>mutate('schedule',{id:seed.schedule[3].id,date:'2026-11-06',title:'bad',position:4}),/닉네임/);
 });
 await db.exec('reset role');await db.exec(read('seed.sql'));assert.equal((await db.query('select title from public.schedule_items where id=$1',[seed.schedule[3].id])).rows[0].title,'공동 산책');
+await db.exec(read('migrations/004_trip_details.sql'));
+await check('details upgrade retains record IDs, applies names/lodging/categories, and does not reapply edits',async()=>{
+  const data=await snap();assert.deepEqual(data.participants.filter(p=>seed.participants.some(s=>s.id===p.id)).map(p=>p.name),seed.participants.map(p=>p.name));assert.equal(data.lodgings[1].name,'온녘');assert.equal(data.schedule.find(s=>s.id===seed.schedule[8].id).title,'여수 점심');
+  await db.query('update public.lodgings set notes=$1 where id=$2',['추가 메모',seed.lodgings[1].id]);await db.exec(read('migrations/004_trip_details.sql'));assert.equal((await snap()).lodgings[1].notes,'추가 메모');
+});
 await db.close();
 await check('setup creates the common URL without tokens and safely repeats without overwriting edits',async()=>{
   const fresh=new PGlite();await fresh.exec(authStub);const setup=read('setup.sql'),results=await fresh.exec(setup);
   assert.equal(results.at(-1).rows[0].invitation_url,'https://mumusyeo.github.io/yeosu/');
-  await fresh.exec('set role anon');const data=(await fresh.query('select public.trip_snapshot($1) data',[trip])).rows[0].data;assert.equal(data.schedule.length,22);
+  await fresh.exec('set role anon');const data=(await fresh.query('select public.trip_snapshot($1) data',[trip])).rows[0].data;assert.equal(data.schedule.length,22);assert.deepEqual(data.participants.map(p=>p.name),seed.participants.map(p=>p.name));assert.equal(data.lodgings[1].name,'온녘');
   await fresh.exec('reset role');await fresh.query('update public.schedule_items set title=$1 where id=$2',['기존 수정',seed.schedule[0].id]);
   await fresh.exec(setup);assert.equal((await fresh.query('select title from public.schedule_items where id=$1',[seed.schedule[0].id])).rows[0].title,'기존 수정');await fresh.close();
 });

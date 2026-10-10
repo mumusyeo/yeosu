@@ -5,13 +5,17 @@ import { validateExpense, allocate } from './expenses.js';
 const DEMO_KEY = 'namjjok-demo-v1';
 const clone = value => structuredClone(value);
 function upgradeDemo(data) {
-  if(data.schema_version===3)return data;
+  if(data.schema_version===4)return data;
   const seed=createSeed();
   data.expenses ||= [];data.expense_splits ||= [];
   data.participants.forEach((p,i)=>{if(p.name==='주최자'||p.name===`친구 ${i}`)p.name=`친구 ${i+1}`;delete p.role;if(p.is_placeholder===undefined)p.is_placeholder=/^친구 [1-8]$/.test(p.name);});
   data.polls.forEach(p=>{delete p.status;delete p.deadline;delete p.confirmed_candidate_id;delete p.decision_reason;});
   for(const index of [1,20]){const row=data.schedule.find(s=>s.id===seed.schedule[index].id);if(row)Object.assign(row,{title:seed.schedule[index].title,description:seed.schedule[index].description,start_time:seed.schedule[index].start_time,verified:true});}
-  delete data.me;delete data.invitations;data.schema_version=3;return data;
+  for(const person of seed.participants){const existing=data.participants.find(p=>p.id===person.id);if(existing)Object.assign(existing,{name:person.name,is_placeholder:false});}
+  for(const index of [8,10,15]){const row=data.schedule.find(s=>s.id===seed.schedule[index].id);if(row)row.title=seed.schedule[index].title;}
+  const lodging=data.lodgings.find(l=>l.id===seed.lodgings[1].id);if(lodging)Object.assign(lodging,{name:seed.lodgings[1].name,notes:seed.lodgings[1].notes});
+  const stay=data.schedule.find(s=>s.id===seed.schedule[16].id);if(stay)stay.description=seed.schedule[16].description;
+  data.trip.title=seed.trip.title;delete data.me;delete data.invitations;data.schema_version=4;return data;
 }
 export class DemoRepository {
   constructor() {

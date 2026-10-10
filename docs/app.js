@@ -51,8 +51,7 @@ function renderConnection() {
   $('#identity').innerHTML=lastNickname?`<span class="avatar" aria-hidden="true">${e(lastNickname.slice(0,1))}</span><span>${e(lastNickname)}</span>`:'<span class="muted">모두 함께 만드는 여행</span>';
 }
 function renderNav() {
-  const tabs=[['schedule','여행 일정'],['votes','맛집 투표'],['lodgings','우리의 숙소'],['budget','예산 · 정산'],['guestbook','방명록']];
-  if(canEdit()) tabs.push(['settings','여행 설정']);
+  const tabs=[['schedule','여행 일정'],['votes','맛집 투표'],['lodgings','숙소'],['budget','예산 · 정산'],['guestbook','방명록']];
   $('#navigation').innerHTML=tabs.map(([id,title])=>`<a href="#${id}" class="${state.section===id?'active':''}" ${state.section===id?'aria-current="page"':''}>${title}</a>`).join('');
 }
 function heading(kicker,title,description,right='') {return `<div class="section-heading"><div><span class="section-kicker">${kicker}</span><h2>${title}</h2><p>${description}</p></div>${right}</div>`;}
@@ -67,7 +66,6 @@ function render() {
   else if(state.section==='lodgings') $('#main').innerHTML=renderLodgings();
   else if(state.section==='guestbook') $('#main').innerHTML=canEdit()?renderGuestbook():'<div class="notice">공유 데이터 설정 후 방명록을 사용할 수 있어요.</div>';
   else if(state.section==='budget') $('#main').innerHTML=canEdit()?renderBudget(state.data,me()):'<div class="notice">공유 데이터 설정 후 정산 내역을 함께 등록할 수 있어요.</div>';
-  else if(state.section==='settings' && canEdit()) $('#main').innerHTML=renderSettings();
   else {state.section='schedule';$('#main').innerHTML=renderSchedule();renderNav();}
   if(state.busy)lockUi(true);
 }
@@ -93,16 +91,13 @@ function renderPoll(poll) {
   return `${button('← 투표 목록','poll-back','','small quiet back-button')}<div class="poll-title"><span class="section-kicker">${shortDate(item.date)} · ${kindNames[item.kind]}</span><h2>${e(item.title)}</h2><p>${e(item.description)}</p><span class="badge ${state.publicPreview||result.kind==='tie'?'pending':''}">${e(state.publicPreview?'초기 후보 미리보기':resultLabel(result,poll))}</span></div>${hiddenMine?'<div class="notice">내가 선택했던 후보가 숨겨졌어요. 다른 후보를 선택해 주세요.</div>':''}<div class="poll-actions">${canEdit()?button('+ 후보 추천하기','candidate-add',poll.id,'primary'):'<p class="notice">공유 데이터 설정 후 후보를 추천하고 투표할 수 있어요.</p>'}</div><div class="candidate-list">${choices||`<div class="empty"><strong>${state.publicPreview?'아직 등록된 초기 후보가 없어요.':'첫 번째 추천을 기다려요.'}</strong>${state.publicPreview?'공유 데이터 설정 후 함께 가고 싶은 곳을 추천해 주세요.':'함께 가고 싶은 식당이나 카페를 후보로 추가해 주세요.'}</div>`}</div>${canEdit()?state.data.candidates.filter(c=>c.poll_id===poll.id&&c.hidden).map(c=>`<div class="card admin-row admin-hidden" style="margin-top:12px"><strong>숨긴 후보 · ${e(c.name)}</strong>${button('다시 표시','unhide',c.id,'small')}</div>`).join(''):''}<p class="muted">${state.publicPreview?'여행 초안의 후보예요. 실제 득표 결과는 공유 데이터 연결 후 확인할 수 있어요.':`${total}표 참여 · 언제든 자유롭게 변경하세요.`}</p>`;
 }
 function renderLodgings() {
-  return heading('A PLACE TO REST','우리의 숙소','밤에는 느긋하게, 내일의 여행을 준비해요.')+`<div class="lodging-grid">${state.data.lodgings.map((l,i)=>`<article class="card lodging-card"><div class="lodging-visual ${i?'suncheon':''}" aria-hidden="true"><span>${e(l.city)}</span><small>${i?'AMONG THE REEDS':'BY THE SEA'}</small></div><span class="section-kicker">NIGHT 0${i+1} · ${shortDate(l.check_in)} → ${shortDate(l.check_out)}</span><h3>${e(l.name)}</h3><span class="badge ${l.verified?'':'pending'}">${l.verified?'숙소 정보 확인됨':'예약 및 상세 정보 확인 필요'}</span><p>${e(l.notes)}</p>${link(l.url,i?'네이버 지도에서 보기':'Airbnb에서 보기','external-link')}${canEdit()?`<div style="margin-top:18px">${button('숙소 정보 수정','lodging-edit',l.id,'small')}</div>`:''}</article>`).join('')}</div>`;
+  return heading('A PLACE TO REST','숙소','밤에는 느긋하게, 내일의 여행을 준비해요.')+`<div class="lodging-grid">${state.data.lodgings.map((l,i)=>`<article class="card lodging-card"><div class="lodging-visual ${i?'suncheon':''}" aria-hidden="true"><span>${e(l.city)}</span><small>${i?'AMONG THE REEDS':'BY THE SEA'}</small></div><span class="section-kicker">NIGHT 0${i+1} · ${shortDate(l.check_in)} → ${shortDate(l.check_out)}</span><h3>${e(l.name)}</h3><span class="badge ${l.verified?'':'pending'}">${l.verified?'숙소 정보 확인됨':'예약 및 상세 정보 확인 필요'}</span><p>${e(l.notes)}</p>${link(l.url,i?'네이버 지도에서 보기':'Airbnb에서 보기','external-link')}${canEdit()?`<div style="margin-top:18px">${button('숙소 정보 수정','lodging-edit',l.id,'small')}</div>`:''}</article>`).join('')}</div>`;
 }
 function renderGuestbook() {
   return heading('LEAVE A LITTLE NOTE','여행 전, 한마디','기대하는 순간, 가져갈 간식, 하고 싶은 이야기. 편하게 남겨요.')+`<form class="card guest-form" data-form="guestbook-create"><div class="guest-top"><span class="avatar">${e((lastNickname||'?').slice(0,1))}</span><strong>${e(lastNickname||'닉네임을 입력해 주세요.')}</strong></div>${nicknameField(state.guestNicknameDraft??lastNickname)}<label class="field" for="guest-content">친구들에게 남길 메시지<textarea id="guest-content" name="content" maxlength="1000" required placeholder="이번 여행에서 가장 기대되는 건…">${e(state.guestDraft)}</textarea></label><p class="form-error" role="alert"></p><div class="form-footer"><span>최대 1,000자 · 10초에 한 번</span><button class="primary" type="submit">메시지 남기기</button></div></form><div class="guest-list">${state.entries.map(entry=>{
     const person=state.data.participants.find(p=>p.id===entry.participant_id);
     return `<article class="card"><div class="guest-top"><span class="avatar">${e((person?.name||'?').slice(0,1))}</span><div><strong>${e(person?.name||'참여자')}</strong><time datetime="${e(entry.created_at)}">${fmtDate(entry.created_at)}${entry.updated_at!==entry.created_at?' · 수정됨':''}</time></div></div><p class="guest-message">${e(entry.content)}</p><div class="guest-controls">${canEdit()?button('수정','guest-edit',entry.id,'small quiet'):''}${canEdit()?button('삭제','guest-delete',entry.id,'small quiet danger'):''}</div></article>`;
   }).join('')||'<div class="empty"><strong>우리 여행의 첫 문장.</strong>첫 번째 메시지를 남겨 주세요.</div>'}</div>${state.entries.length>=state.limit?`<div style="margin-top:20px">${button('메시지 더 보기','guest-more')}</div>`:''}`;
-}
-function renderSettings() {
-  return heading('MAKE IT OURS','여행 설정','모두 같은 권한으로 일정과 친구 명단을 함께 수정해요.',button('기록 내려받기','export','','small'))+`<div class="admin-grid"><section class="card admin-card"><h3>함께 떠나는 친구들</h3><p class="muted">처음에는 8자리예요. 새 닉네임을 쓰면 비어 있는 자리에 자동 등록돼요. 정산 전 친구 이름을 맞춰 주세요.</p>${state.data.participants.map(p=>`<div class="admin-row"><div><strong>${e(p.name)}</strong><br><small>${p.is_placeholder?'닉네임 등록 대기':'참여 닉네임'}</small></div>${button('이름 수정','participant-edit',p.id,'small')}</div>`).join('')}${button('+ 친구 추가','participant-add','','small')}</section><section class="card admin-card"><h3>일정 편집</h3>${state.data.schedule.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.position-b.position).map(item=>`<div class="admin-row"><div><small>${shortDate(item.date)} · ${item.start_time?.slice(0,5)||'시간 미정'}</small><br><strong>${e(item.title)}</strong></div>${button('수정','schedule-edit',item.id,'small')}</div>`).join('')}${button('+ 새 일정 추가','schedule-add','','small')}</section></div>${state.repo.demo?`<div class="notice" style="margin-top:20px">${button('데모 초기화','demo-reset','','small danger')}</div>`:''}`;
 }
 function expenseForm(expense=null) {
   const current=expense?localDateTime(expense.occurred_at):localDateTime(new Date().toISOString());
@@ -159,8 +154,7 @@ async function action(name,id,element) {
   else if(name==='schedule-edit')scheduleForm(state.data.schedule.find(s=>s.id===id));
   else if(name==='schedule-add')showForm('새 일정 추가','schedule-add',dateField()+field('일정 제목','title','','text','required maxlength="100"')+`<label class="field">일정 종류<select name="kind">${Object.entries(kindNames).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><small>식사·카페를 선택하면 투표도 함께 만들어요.</small></label>`+textarea('설명','description','',1000));
   else if(name==='lodging-edit'){const l=state.data.lodgings.find(l=>l.id===id);showForm('숙소 정보 수정','lodging',field('숙소 이름','name',l.name,'text','required maxlength="100"')+field('숙소 링크','url',l.url,'url','required')+textarea('예약 상태·주소·입퇴실 안내','notes',l.notes,1000)+check('숙소 정보 확인 완료','verified',l.verified),id);}
-  else if(name==='participant-edit'){const p=state.data.participants.find(p=>p.id===id);showForm('참여자 수정','participant',field('이름','name',p.name,'text','required maxlength="40"')+'<p class="muted">친구 명단의 닉네임을 수정해요.</p>',id);}
-  else if(name==='participant-add')showForm('친구 추가','participant-add',field('이름','name','','text','required maxlength="40"'));
+
   else if(name==='expense-add')expenseForm();
   else if(name==='expense-edit')expenseForm(state.data.expenses.find(x=>x.id===id));
   else if(name==='expense-delete')confirmAction('결제 내역 삭제','이 내역과 배분 금액을 정산에서 제외할까요?','expense_delete',id,{id});
@@ -206,7 +200,7 @@ document.addEventListener('submit',async event=>{
 });
 document.addEventListener('input',event=>{if(event.target.id==='guest-content')state.guestDraft=event.target.value;if(event.target.name==='nickname'&&event.target.closest('.guest-form'))state.guestNicknameDraft=event.target.value;});
 document.addEventListener('change',async event=>{if(event.target.name==='split_mode'){const box=$('#split-people');if(box)box.hidden=event.target.value!=='some';}});
-window.addEventListener('hashchange',()=>{const target=location.hash.slice(1);if(['schedule','votes','lodgings','budget','guestbook','settings'].includes(target)){state.section=target;state.pollId=null;render();}});
+window.addEventListener('hashchange',()=>{const target=location.hash.slice(1);if(['schedule','votes','lodgings','budget','guestbook'].includes(target)){state.section=target;state.pollId=null;render();}});
 window.addEventListener('online',()=>{toast('연결이 복구됐어요.');refresh();});
 window.addEventListener('offline',()=>{renderConnection();toast('오프라인이에요. 작성 중인 내용은 유지돼요.');});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh();});
@@ -214,7 +208,7 @@ async function start() {
   try{
     const config=window.TRIP_CONFIG||{};
     const hasUrl=Boolean(config.supabaseUrl),hasKey=Boolean(config.supabaseKey);
-    const target=location.hash.slice(1);if(['schedule','votes','lodgings','budget','guestbook','settings'].includes(target))state.section=target;
+    const target=location.hash.slice(1);if(['schedule','votes','lodgings','budget','guestbook'].includes(target))state.section=target;
     if(hasUrl||hasKey){showPublicPreview();render();}
     if(hasUrl!==hasKey)throw new Error('서비스 설정이 일부만 입력되어 있어요. URL과 공개 키를 모두 설정해 주세요.');
     state.repo=hasUrl?await SupabaseRepository.create(config):new DemoRepository();

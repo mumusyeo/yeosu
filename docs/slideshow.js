@@ -10,7 +10,7 @@ export function initSlideshow() {
     pause.textContent=paused?'재생':'일시정지';pause.setAttribute('aria-label',paused?'슬라이드쇼 자동 재생':'슬라이드쇼 일시정지');
   };
   const move=step=>{index=(index+step+slides.length)%slides.length;update();};
-  const reset=()=>{clearInterval(timer);if(!paused&&!document.hidden)timer=setInterval(()=>move(1),5000);};
+  const reset=()=>{clearInterval(timer);if(!paused&&!document.hidden)timer=setInterval(()=>move(1),3000);};
   region.addEventListener('click',event=>{const control=event.target.closest('[data-slide-control],[data-slide-index]');if(!control)return;
     if(control.dataset.slideIndex!==undefined)index=Number(control.dataset.slideIndex);
     else if(control.dataset.slideControl==='pause')paused=!paused;

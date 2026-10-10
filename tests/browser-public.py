@@ -29,7 +29,7 @@ try:
         browser=p.chromium.launch(headless=True);ctx=browser.new_context(viewport={'width':390,'height':844})
         ctx.route('**/vendor/supabase.js',lambda route:route.fulfill(content_type='text/javascript',body=SDK))
         page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-        page.goto(BASE);expect(page.get_by_role('link',name='여행 설정',exact=True)).to_be_visible()
+        page.goto(BASE);assert page.get_by_role('link',name='여행 설정',exact=True).count()==0
         expect(page.locator('.schedule-row')).to_have_count(7)
         expect(page.locator('#connection')).to_contain_text('로그인 없이 누구나')
         assert page.locator('[data-action="login"],[data-action="invite"],[data-action="logout"]').count()==0
@@ -46,9 +46,9 @@ try:
         fallback=missing.new_page();fallback.on('pageerror',lambda e:errors.append(str(e)));fallback.goto(BASE)
         expect(fallback.locator('#connection')).to_contain_text('공유 데이터 설정')
         expect(fallback.locator('.schedule-row')).to_have_count(7)
-        fallback.get_by_role('link',name='우리의 숙소',exact=True).click();expect(fallback.locator('.lodging-card')).to_have_count(2)
+        fallback.get_by_role('link',name='숙소',exact=True).click();expect(fallback.locator('.lodging-card')).to_have_count(2)
         fallback.evaluate("window.__missing=false;document.dispatchEvent(new Event('visibilitychange'))")
-        expect(fallback.get_by_role('link',name='여행 설정',exact=True)).to_be_visible()
+        assert fallback.get_by_role('link',name='여행 설정',exact=True).count()==0
         expect(fallback.locator('#connection')).to_contain_text('로그인 없이 누구나')
         missing.close()
         blocked=browser.new_context();blocked.route('**/vendor/supabase.js',lambda route:route.abort())
