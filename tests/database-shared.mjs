@@ -92,6 +92,15 @@ await check('details upgrade retains record IDs, applies names/lodging/categorie
   const data=await snap();assert.deepEqual(data.participants.filter(p=>seed.participants.some(s=>s.id===p.id)).map(p=>p.name),seed.participants.map(p=>p.name));assert.equal(data.lodgings[1].name,'온녘');assert.equal(data.schedule.find(s=>s.id===seed.schedule[8].id).title,'여수 점심');
   await db.query('update public.lodgings set notes=$1 where id=$2',['추가 메모',seed.lodgings[1].id]);await db.exec(read('migrations/004_trip_details.sql'));assert.equal((await snap()).lodgings[1].notes,'추가 메모');
 });
+await db.exec(read('migrations/005_expense_accounts.sql'));
+await check('optional accounts persist with chronological ordering, edits, legacy payloads and rollback',async()=>{
+  await role('anon');const input={nickname:'밀로',item:'계좌 확인',amount:1001,split_mode:'all',occurred_at:'2026-11-07T12:00:00+09:00',request_id:'90000000-0000-4000-8000-000000000041',account_number:'  은행 001-23  '};
+  await mutate('expense_create',input);await mutate('expense_create',{...input,item:'먼저 지출',occurred_at:'2026-11-06T13:00:00+09:00',request_id:'90000000-0000-4000-8000-000000000042',account_number:''});let data=await snap();assert(data.expense_account_numbers);assert.deepEqual(data.expenses.map(e=>e.item),['먼저 지출','계좌 확인']);const expense=data.expenses[1];assert.equal(expense.account_number,'은행 001-23');
+  const edit={...input,id:expense.id,occurred_at:'2026-11-06T12:00:00+09:00',account_number:'새 은행 004-56'};await mutate('expense_edit',edit);data=await snap();assert.equal(data.expenses[0].id,expense.id);assert.equal(data.expenses[0].account_number,'새 은행 004-56');
+  delete edit.account_number;await mutate('expense_edit',edit);assert.equal((await snap()).expenses[0].account_number,'새 은행 004-56');
+  await assert.rejects(()=>mutate('expense_edit',{...edit,account_number:'x'.repeat(101)}),/100자/);assert.equal((await snap()).expenses[0].account_number,'새 은행 004-56');
+  await mutate('expense_edit',{...edit,account_number:''});assert.equal((await snap()).expenses[0].account_number,'');await db.exec('reset role');await db.exec(read('migrations/005_expense_accounts.sql'));assert.equal((await snap()).expenses.length,2);
+});
 await db.close();
 await check('setup creates the common URL without tokens and safely repeats without overwriting edits',async()=>{
   const fresh=new PGlite();await fresh.exec(authStub);const setup=read('setup.sql'),results=await fresh.exec(setup);

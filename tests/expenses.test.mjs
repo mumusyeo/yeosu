@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { allocate,balanceSheet,validateExpense } from '../docs/expenses.js';
+import { allocate,balanceSheet,validateExpense,renderBudget } from '../docs/expenses.js';
 test('won remainder is deterministic and preserves exact amount',()=>{
   assert.deepEqual(allocate(1001,['b','a','c']),[{participant_id:'a',amount:334},{participant_id:'b',amount:334},{participant_id:'c',amount:333}]);
   assert.deepEqual(allocate(1,['c','b','a']),[{participant_id:'a',amount:1},{participant_id:'b',amount:0},{participant_id:'c',amount:0}]);
@@ -16,4 +16,11 @@ test('payer may be excluded; balances and transfers sum exactly; deletion exclud
   const r=balanceSheet(expenses,splits,people);assert.equal(r.total,1601);assert.equal(r.rows.reduce((n,p)=>n+p.net,0),0);assert.deepEqual(r.rows.map(p=>p.net),[801,-101,-700]);
   for(const p of r.rows){const incoming=r.transfers.filter(t=>t.to===p.id).reduce((n,t)=>n+t.amount,0),outgoing=r.transfers.filter(t=>t.from===p.id).reduce((n,t)=>n+t.amount,0);assert.equal(incoming-outgoing,p.net);}
   expenses[0].deleted_at='2026-11-01';assert.equal(balanceSheet(expenses,splits,people).total,600);
+});
+
+test('optional account details survive validation and render safely in chronological order',()=>{
+  const people=[{id:'p',name:'밀로',active:true}],input={item:'점심',amount:1000,occurred_at:'2026-11-06T12:00:00+09:00',split_mode:'all'};
+  assert.equal(validateExpense(input,people).account_number,'');assert.equal(validateExpense({...input,account_number:'  은행 001-23  '},people).account_number,'은행 001-23');assert.throws(()=>validateExpense({...input,account_number:'x'.repeat(101)},people),/100자/);
+  const rows=[{id:'b',item:'늦은 내역',amount:1000,paid_by:'p',occurred_at:'2026-11-06T15:00:00+09:00',created_at:'2026-10-10T00:00:00Z',account_number:'<script>bad</script>'},{id:'a',item:'빠른 내역',amount:1000,paid_by:'p',occurred_at:'2026-11-06T04:00:00Z',created_at:'2026-10-10T01:00:00Z'}];
+  const html=renderBudget({expenses:rows,expense_splits:[],participants:people},null);assert(html.indexOf('빠른 내역')<html.indexOf('늦은 내역'));assert(html.includes('&lt;script&gt;bad&lt;/script&gt;'));assert(!html.includes('<script>bad'));
 });

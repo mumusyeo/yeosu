@@ -37,7 +37,7 @@ export function createSeed() {
   });
   return {
     trip: { id: TRIP_ID, title: '야앙! 우리가 간다!', start_date: '2026-11-06', end_date: '2026-11-08', timezone: 'Asia/Seoul' },
-    schema_version:4, schedule, polls, candidates, votes: [], guestbook: [], expenses:[], expense_splits:[],
+    schema_version:4, expense_account_numbers:true, schedule, polls, candidates, votes: [], guestbook: [], expenses:[], expense_splits:[],
     participants: Array.from({length:8}, (_, i) => ({ id: uuid('f',i+1), trip_id: TRIP_ID, name: ['밀로','임호','소연','레나','로건','유미','희우','희지'][i], active: true, is_placeholder:false })),
     lodgings: [
       { id: uuid('e',1), trip_id: TRIP_ID, city:'여수', name:'여기요 독채', check_in:'2026-11-06', check_out:'2026-11-07', url:'https://www.airbnb.co.kr/rooms/959847712327131849', notes:'예약 상태 · 주소 · 입퇴실 시간 확인 필요', verified:false },
