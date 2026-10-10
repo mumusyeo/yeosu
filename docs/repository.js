@@ -30,7 +30,7 @@ export class DemoRepository {
     return this.memory || createSeed();
   }
   write(data) { this.memory = clone(data); try { localStorage.setItem(DEMO_KEY, JSON.stringify(data)); } catch { /* memory demo still usable */ } }
-  async snapshot() { const data=clone(this.read());delete data.invitations;return {...data,me:null,expense_account_numbers:true,server_time:new Date().toISOString()}; }
+  async snapshot() { const data=clone(this.read());delete data.invitations;return {...data,me:null,expense_account_numbers:true,expense_bank_names:true,server_time:new Date().toISOString()}; }
   async guestbook(limit=20) { return clone(this.read().guestbook.filter(e=>!e.deleted_at).sort((a,b)=>b.created_at.localeCompare(a.created_at)).slice(0,limit)); }
   async mutate(action, payload) {
     const work = async () => {
@@ -96,7 +96,7 @@ export class DemoRepository {
           if(!payload.request_id)throw new Error('요청 식별자가 필요해요.');
           expense={id:newId(),trip_id:TRIP_ID,paid_by:me.id,request_id:payload.request_id,created_at:now,deleted_at:null};data.expenses.push(expense);
         }
-        Object.assign(expense,{item:input.item,amount:input.amount,account_number:input.account_number,occurred_at:input.occurred_at,split_mode:input.split_mode,updated_at:now});
+        Object.assign(expense,{item:input.item,amount:input.amount,bank_name:input.bank_name,account_number:input.account_number,occurred_at:input.occurred_at,split_mode:input.split_mode,updated_at:now});
         data.expense_splits=data.expense_splits.filter(s=>s.expense_id!==expense.id);
         data.expense_splits.push(...allocate(input.amount,input.participant_ids).map(split=>({...split,id:newId(),trip_id:TRIP_ID,expense_id:expense.id})));
       } else if(action==='expense_delete'){

@@ -24,6 +24,7 @@ end;
 $install_nicknames$;
 ${read('migrations/004_trip_details.sql')}
 ${read('migrations/005_expense_accounts.sql')}
+${read('migrations/006_expense_banks.sql')}
 commit;
 select 'https://mumusyeo.github.io/yeosu/' as invitation_url,
   'Ready: shared nickname board. No Auth configuration or personal links needed.' as status;

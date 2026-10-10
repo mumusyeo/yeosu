@@ -1,6 +1,6 @@
 import { escapeHtml as e, safeUrl, pollResult, resultLabel, validateCandidate, validateMessage, newId, normalizeName, validateNickname } from './domain.js';
 import { DemoRepository, SupabaseRepository } from './repository.js';
-import { renderBudget, validateExpense } from './expenses.js';
+import { accountDetails, renderBudget, validateExpense } from './expenses.js';
 import { createSeed } from './seed.js';
 import { initSlideshow } from './slideshow.js';
 
@@ -49,7 +49,7 @@ function renderConnection() {
   el.className='connection'+(state.repo?.demo?' demo':'');
   el.innerHTML=state.repo?.demo?'<strong>로컬 데모</strong> <span>이 브라우저에만 저장돼요. 등록할 때 닉네임을 입력해 주세요.</span>':state.publicPreview?`<strong>기본 일정 보기</strong> <span>${e(state.error||'공유 기능을 연결하고 있어요.')}</span>`:state.error?`<strong>연결 확인 중</strong> <span>${e(state.error)}</span>`:!navigator.onLine?'<strong>오프라인</strong> <span>다시 연결되면 저장할 수 있어요.</span>':'';
   el.hidden=!el.textContent.trim();
-  $('#identity').innerHTML=lastNickname?`<span class="avatar" aria-hidden="true">${e(lastNickname.slice(0,1))}</span><span>${e(lastNickname)}</span>`:'<span class="muted">모두 함께 만드는 여행</span>';
+  $('#identity').innerHTML=lastNickname?`<span class="avatar" aria-hidden="true">${e(lastNickname.slice(0,1))}</span><span>${e(lastNickname)}</span>`:'';
 }
 function renderNav() {
   const tabs=[['schedule','여행 일정'],['votes','맛집 투표'],['lodgings','숙소'],['budget','예산 · 정산'],['guestbook','방명록']];
@@ -101,11 +101,12 @@ function renderGuestbook() {
   }).join('')||'<div class="empty"><strong>우리 여행의 첫 문장.</strong>첫 번째 메시지를 남겨 주세요.</div>'}</div>${state.entries.length>=state.limit?`<div style="margin-top:20px">${button('메시지 더 보기','guest-more')}</div>`:''}`;
 }
 function expenseForm(expense=null) {
+  const account=accountDetails(expense||{});
   const current=expense?localDateTime(expense.occurred_at):localDateTime(new Date().toISOString());
   const ids=expense?state.data.expense_splits.filter(s=>s.expense_id===expense.id).map(s=>s.participant_id):[];
   showForm(expense?'내 결제 내역 수정':'내 결제 내역 등록',expense?'expense-edit':'expense-create',
     `<p class="dialog-description">${expense?'결제자: '+e(state.data.participants.find(p=>p.id===expense.paid_by)?.name||'참여자'):'입력한 닉네임을 결제자로 기록해요.'} · 원 단위로 균등 배분해요.</p><div class="form-row">${field('날짜','expense_date',current.slice(0,10),'date','required')}${field('시간','expense_time',current.slice(11,16),'time','required')}</div>`+
-    field('계좌번호 (선택)','account_number',expense?.account_number||'','text','maxlength="100" placeholder="예: 카카오뱅크 3333-00-1234567"')+field('항목','item',expense?.item||'','text','required maxlength="100"')+field('금액 (원)','amount',expense?.amount||'','number','required min="1" max="2147483647" step="1"')+
+    `<div class="form-row">${field('은행명 (선택)','bank_name',account.bank_name,'text','maxlength="40" placeholder="예: 카카오뱅크"')}${field('계좌번호 (선택)','account_number',account.account_number,'text','maxlength="100" placeholder="예: 3333-00-1234567"')}</div>`+field('항목','item',expense?.item||'','text','required maxlength="100"')+field('금액 (원)','amount',expense?.amount||'','number','required min="1" max="2147483647" step="1"')+
     `<fieldset class="split-fieldset"><legend>정산 대상자</legend><div class="split-modes"><label><input type="radio" name="split_mode" value="all" ${expense?.split_mode!=='some'?'checked':''}> 전부</label><label><input type="radio" name="split_mode" value="some" ${expense?.split_mode==='some'?'checked':''}> 일부</label></div><div id="split-people" class="split-people" ${expense?.split_mode==='some'?'':'hidden'}>${state.data.participants.filter(p=>p.active).map(p=>`<label><input type="checkbox" name="participant_ids" value="${e(p.id)}" ${ids.includes(p.id)?'checked':''}>${e(p.name)}</label>`).join('')}</div><p class="muted">‘전부’는 저장할 때 참여 중인 친구 전원이에요.</p></fieldset>`,expense?.id||'','내역 저장');
   $('#dialog form').dataset.requestId=newId();
 }
@@ -169,6 +170,7 @@ async function action(name,id,element) {
 
 document.addEventListener('click',async event=>{
   const nav=event.target.closest('#navigation a');if(nav){event.preventDefault();navigate(nav.getAttribute('href').slice(1));return;}
+  if(event.target.closest('.hero-link')){event.preventDefault();navigate('schedule');$('#navigation').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth',block:'start'});return;}
   const el=event.target.closest('[data-action]');if(!el||el.disabled)return;
   event.preventDefault();
   if(state.busy)return;lockUi(true);
@@ -191,7 +193,7 @@ document.addEventListener('submit',async event=>{
     else if(type==='lodging')await register('lodging',{...values,id,verified:values.verified==='on'});
     else if(type==='participant'){const self=state.data.participants.find(p=>normalizeName(p.name)===normalizeName(nickname));await register('participant',{...values,id});if(self?.id===id){rememberNickname(values.name);render();}}
     else if(type==='participant-add')await register('participant_add',values);
-    else if(['expense-create','expense-edit'].includes(type)){const input=validateExpense({...values,occurred_at:fromKst(`${values.expense_date}T${values.expense_time}`),participant_ids:new FormData(form).getAll('participant_ids')},state.data.participants);if(input.account_number&&!state.repo.demo&&!state.data.expense_account_numbers)throw new Error('계좌번호 저장을 위한 공유 데이터 업데이트가 필요해요. 최신 setup.sql 적용 후 다시 시도해 주세요.');await register(type==='expense-create'?'expense_create':'expense_edit',{...input,id,request_id:form.dataset.requestId});}
+    else if(['expense-create','expense-edit'].includes(type)){const input=validateExpense({...values,occurred_at:fromKst(`${values.expense_date}T${values.expense_time}`),participant_ids:new FormData(form).getAll('participant_ids')},state.data.participants);if((input.account_number||input.bank_name)&&!state.repo.demo&&!state.data.expense_bank_names)throw new Error('계좌번호 저장을 위한 공유 데이터 업데이트가 필요해요. 최신 setup.sql 적용 후 다시 시도해 주세요.');await register(type==='expense-create'?'expense_create':'expense_edit',{...input,id,request_id:form.dataset.requestId});}
     else if(type==='guestbook-create'){const content=validateMessage(values.content);await register('guestbook_create',{content,request_id:state.requestId});state.guestDraft='';state.requestId=newId();const input=$('#guest-content');if(input)input.value='';render();}
     else if(type==='guest-edit')await register('guestbook_edit',{id,content:validateMessage(values.content)});
     else if(type==='reset'){await state.repo.reset();state.section='schedule';await refresh();}
