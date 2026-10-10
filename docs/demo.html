@@ -822,10 +822,8 @@
       showForm("\uB2C9\uB124\uC784\uC73C\uB85C \uD22C\uD45C\uD558\uAE30", "vote", `<p class="dialog-description">${escapeHtml(c.name)}\uC5D0 \uD22C\uD45C\uD574\uC694. \uAC19\uC740 \uB2C9\uB124\uC784\uC73C\uB85C \uC774\uBBF8 \uC774 \uD6C4\uBCF4\uB97C \uC120\uD0DD\uD588\uB2E4\uBA74 \uD22C\uD45C\uAC00 \uCDE8\uC18C\uB3FC\uC694.</p>`, id, "\uD22C\uD45C \uBC18\uC601");
     } else if (name === "candidate-add") showForm("\uD568\uAED8 \uAC08 \uACF3 \uCD94\uCC9C\uD558\uAE30", "candidate", `${field("\uC7A5\uC18C \uC774\uB984", "name", "", "text", 'required maxlength="80"')}${field("\uC9C0\uB3C4 \uB610\uB294 \uC0C1\uC138 \uB9C1\uD06C (\uC120\uD0DD)", "url", "", "url")}${field("1\uC778 \uC608\uC0C1 \uAC00\uACA9 (\uC120\uD0DD, \uC6D0)", "price", "", "number", 'min="0" max="2147483647" step="1"')}${textarea("\uCD94\uCC9C \uC774\uC720", "description")}`, id, "\uD6C4\uBCF4 \uB4F1\uB85D\uD558\uAE30");
     else if (name === "hide") confirmAction("\uD6C4\uBCF4 \uC228\uAE30\uAE30", "\uC774 \uD6C4\uBCF4\uC758 \uD45C\uB294 \uC9D1\uACC4\uC5D0\uC11C \uC81C\uC678\uB3FC\uC694. \uC120\uD0DD\uD55C \uCE5C\uAD6C\uB294 \uB2E4\uB978 \uD6C4\uBCF4\uB97C \uACE8\uB77C\uC57C \uD574\uC694.", "hide_candidate", id, { id, hidden: true });
-    else if (name === "unhide") {
-      await write("hide_candidate", { id, hidden: false });
-      toast("\uD6C4\uBCF4\uB97C \uB2E4\uC2DC \uD45C\uC2DC\uD588\uC5B4\uC694.");
-    } else if (name === "schedule-edit") scheduleForm(state.data.schedule.find((s) => s.id === id));
+    else if (name === "unhide") confirmAction("\uD6C4\uBCF4 \uB2E4\uC2DC \uD45C\uC2DC", "\uC774 \uD6C4\uBCF4\uB97C \uB2E4\uC2DC \uD45C\uC2DC\uD558\uACE0 \uBC1B\uC740 \uD45C\uB97C \uC9D1\uACC4\uC5D0 \uD3EC\uD568\uD574\uC694.", "hide_candidate", id, { id, hidden: false });
+    else if (name === "schedule-edit") scheduleForm(state.data.schedule.find((s) => s.id === id));
     else if (name === "schedule-add") showForm("\uC0C8 \uC77C\uC815 \uCD94\uAC00", "schedule-add", dateField() + field("\uC77C\uC815 \uC81C\uBAA9", "title", "", "text", 'required maxlength="100"') + `<label class="field">\uC77C\uC815 \uC885\uB958<select name="kind">${Object.entries(kindNames).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select><small>\uC2DD\uC0AC\xB7\uCE74\uD398\uB97C \uC120\uD0DD\uD558\uBA74 \uD22C\uD45C\uB3C4 \uD568\uAED8 \uB9CC\uB4E4\uC5B4\uC694.</small></label>` + textarea("\uC124\uBA85", "description", "", 1e3));
     else if (name === "lodging-edit") {
       const l = state.data.lodgings.find((l2) => l2.id === id);

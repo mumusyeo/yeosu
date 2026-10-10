@@ -156,7 +156,7 @@ async function action(name,id,element) {
   if(name==='vote'){const c=state.data.candidates.find(c=>c.id===id);showForm('닉네임으로 투표하기','vote',`<p class="dialog-description">${e(c.name)}에 투표해요. 같은 닉네임으로 이미 이 후보를 선택했다면 투표가 취소돼요.</p>`,id,'투표 반영');}
   else if(name==='candidate-add')showForm('함께 갈 곳 추천하기','candidate',`${field('장소 이름','name','','text','required maxlength="80"')}${field('지도 또는 상세 링크 (선택)','url','','url')}${field('1인 예상 가격 (선택, 원)','price','','number','min="0" max="2147483647" step="1"')}${textarea('추천 이유','description')}`,id,'후보 등록하기');
   else if(name==='hide')confirmAction('후보 숨기기','이 후보의 표는 집계에서 제외돼요. 선택한 친구는 다른 후보를 골라야 해요.','hide_candidate',id,{id,hidden:true});
-  else if(name==='unhide'){await write('hide_candidate',{id,hidden:false});toast('후보를 다시 표시했어요.');}
+  else if(name==='unhide')confirmAction('후보 다시 표시','이 후보를 다시 표시하고 받은 표를 집계에 포함해요.','hide_candidate',id,{id,hidden:false});
   else if(name==='schedule-edit')scheduleForm(state.data.schedule.find(s=>s.id===id));
   else if(name==='schedule-add')showForm('새 일정 추가','schedule-add',dateField()+field('일정 제목','title','','text','required maxlength="100"')+`<label class="field">일정 종류<select name="kind">${Object.entries(kindNames).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><small>식사·카페를 선택하면 투표도 함께 만들어요.</small></label>`+textarea('설명','description','',1000));
   else if(name==='lodging-edit'){const l=state.data.lodgings.find(l=>l.id===id);showForm('숙소 정보 수정','lodging',field('숙소 이름','name',l.name,'text','required maxlength="100"')+field('숙소 링크','url',l.url,'url','required')+textarea('예약 상태·주소·입퇴실 안내','notes',l.notes,1000)+check('숙소 정보 확인 완료','verified',l.verified),id);}
