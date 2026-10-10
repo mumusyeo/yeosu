@@ -1,27 +1,27 @@
 # 우리, 남쪽으로 떠나요
 
-2026.11.06–11.08 여수–순천 여행 초대장. 상시 투표와 현재 1위 일정 연동, 방명록, 전부/일부 정산 대상자 예산표를 지원한다. 주최자 계정은 없다.
+2026.11.06–11.08 여수–순천 여행 사이트. 모두 같은 권한이며 로그인·개인 초대 링크 없이 닉네임으로 투표·정산·방명록을 함께 관리합니다. 현재 득표 1위가 일정표에 반영되며 투표 마감은 없습니다. 메인 사진 두 장을 슬라이드쇼로 보여 줍니다.
 
-[초대장](https://mumusyeo.github.io/yeosu/) · [공개 데모](https://mumusyeo.github.io/yeosu/demo.html) · [배포 상태](https://github.com/mumusyeo/yeosu/actions)
+[여행 사이트](https://mumusyeo.github.io/yeosu/) · [바로 체험하는 데모](https://mumusyeo.github.io/yeosu/demo.html) · [배포 상태](https://github.com/mumusyeo/yeosu/actions)
 
-Windows에서 다음 한 명령으로 빌드·검증·GitHub 업로드·Pages 배포·완료 확인을 실행한다.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\Deploy.ps1
-```
-
-로컬은 `preview.html`을 더블클릭하거나 다음 명령으로 실행한다. 사용 가능한 포트에서 브라우저가 열리며, 기본은 로컬 데모다.
+로컬 실행:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\Start-Preview.ps1
 ```
 
-**기본 일정·숙소·초기 후보는 바로 열람할 수 있다.** 실제 투표·정산·방명록 공유에는 [SETUP.md](SETUP.md)의 SQL 실행과 익명 로그인 활성화가 필요하다. 공개 키는 이미 연결돼 있다.
+공개 사이트 배포(빌드·검증·업로드·Pages 배포 확인까지):
 
-- [요구사항과 원본 사진 정보](PRD.md)
-- [실행·Supabase 설정·배포·문제 해결](SETUP.md)
-- [검증과 구현 상태](IMPLEMENTATION.md)
-- [최초 DB 설정 SQL](supabase/setup.sql)
-- [v1 DB 업그레이드](supabase/migrations/002_shared_expenses.sql)
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Deploy.ps1
+```
 
-카카오톡 사진은 실행·빌드·수정에 사용하지 않는다. 데모의 투표·정산·글은 해당 브라우저에만 저장된다.
+실제 공동 저장은 **처음 한 번 Supabase SQL Editor에서 [supabase/setup.sql](supabase/setup.sql)을 실행**해야 합니다. 로그인 설정이나 초대 링크는 필요 없습니다. [SETUP.md](SETUP.md)를 참고하세요. 데이터베이스가 준비되기 전에도 기본 일정과 사진은 보입니다.
+
+로컬 데모는 Supabase 없이 사용할 수 있으며 데이터가 해당 브라우저에 저장됩니다. preview.html을 더블클릭해도 됩니다.
+
+- [전체 요구사항과 원본 사진의 일정 정보](PRD.md)
+- [실행·설정·배포·오류 해결](SETUP.md)
+- [구현 및 검증 상태](IMPLEMENTATION.md)
+
+카카오톡 원본 사진은 코드에 의존하지 않습니다. main_img와 main_img2는 공개 에셋에도 복사되어 있습니다.

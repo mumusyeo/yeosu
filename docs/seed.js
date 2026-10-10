@@ -37,8 +37,8 @@ export function createSeed() {
   });
   return {
     trip: { id: TRIP_ID, title: '우리, 남쪽으로 떠나요', start_date: '2026-11-06', end_date: '2026-11-08', timezone: 'Asia/Seoul' },
-    schema_version:2, schedule, polls, candidates, votes: [], guestbook: [], expenses:[], expense_splits:[],
-    participants: Array.from({length:8}, (_, i) => ({ id: uuid('f',i+1), trip_id: TRIP_ID, name: `친구 ${i+1}`, active: true })),
+    schema_version:3, schedule, polls, candidates, votes: [], guestbook: [], expenses:[], expense_splits:[],
+    participants: Array.from({length:8}, (_, i) => ({ id: uuid('f',i+1), trip_id: TRIP_ID, name: `친구 ${i+1}`, active: true, is_placeholder:true })),
     lodgings: [
       { id: uuid('e',1), trip_id: TRIP_ID, city:'여수', name:'여기요 독채', check_in:'2026-11-06', check_out:'2026-11-07', url:'https://www.airbnb.co.kr/rooms/959847712327131849', notes:'예약 상태 · 주소 · 입퇴실 시간 확인 필요', verified:false },
       { id: uuid('e',2), trip_id: TRIP_ID, city:'순천', name:'순천 숙소 · 이름 확인 필요', check_in:'2026-11-07', check_out:'2026-11-08', url:'https://map.naver.com/p/entry/place/2048015818', notes:'숙박일은 일정 기준 · 예약 및 바비큐·불멍 가능 여부 확인 필요', verified:false },

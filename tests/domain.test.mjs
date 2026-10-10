@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pollResult,resultLabel,safeUrl,escapeHtml,validateCandidate,validateMessage } from '../docs/domain.js';
+import { pollResult,resultLabel,safeUrl,escapeHtml,validateCandidate,validateMessage,validateNickname } from '../docs/domain.js';
 import { createSeed } from '../docs/seed.js';
+test('nicknames are required, bounded and collapse whitespace without becoming accounts',()=>{
+  assert.equal(validateNickname('  바다   친구\t'),'바다 친구');
+  assert.throws(()=>validateNickname(' \t '));assert.throws(()=>validateNickname('가'.repeat(41)));
+  assert.equal(validateNickname('가'.repeat(40)).length,40);
+});
 
 test('photo itinerary preserves latest train bookings and eight empty polls',()=>{
   const s=createSeed();assert.equal(s.polls.length,8);assert.equal(s.participants.length,8);assert.equal(s.votes.length,0);

@@ -12,6 +12,9 @@ for(const match of html.matchAll(/(?:href|src)="(\.\/[^"#]+)"/g))assert(readFile
 const sourceFiles=readdirSync(new URL('docs/',base)).filter(f=>f.endsWith('.js'));
 for(const file of sourceFiles)assert(!/KakaoTalk_/.test(readFileSync(new URL(`docs/${file}`,base),'utf8')),`${file} depends on original photos`);
 const preview=readFileSync(new URL('preview.html',base),'utf8');
+const repository=readFileSync(new URL('docs/repository.js',base),'utf8');
+assert(!/signInAnonymously|redeem_invite|hasSession/.test(repository),'Shared board must not require authentication or invitations');
+assert.equal((preview.match(/data:image\/jpeg;base64,/g)||[]).length,2,'Both slideshow photographs must be embedded');
 assert.equal(readFileSync(new URL('docs/demo.html',base),'utf8'),preview);
 assert(!preview.includes('sb_publishable_'),'Standalone demo must use local storage');
 assert(preview.includes('data:image/svg+xml;base64,'));assert(!preview.includes('type="module"'));assert(!preview.includes('src="./app.js"'));assert(!preview.includes('href="./styles.css"'));

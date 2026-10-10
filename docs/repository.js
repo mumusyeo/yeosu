@@ -1,22 +1,21 @@
 import { createSeed, TRIP_ID } from './seed.js';
-import { normalizeName, validateCandidate, validateMessage, safeUrl, newId } from './domain.js';
+import { normalizeName, validateCandidate, validateMessage, safeUrl, newId, validateNickname } from './domain.js';
 import { validateExpense, allocate } from './expenses.js';
 
 const DEMO_KEY = 'namjjok-demo-v1';
 const clone = value => structuredClone(value);
 function upgradeDemo(data) {
-  if(data.schema_version===2)return data;
+  if(data.schema_version===3)return data;
   const seed=createSeed();
   data.expenses ||= [];data.expense_splits ||= [];
-  data.participants.forEach((p,i)=>{if(p.name==='주최자'||p.name===`친구 ${i}`)p.name=`친구 ${i+1}`;delete p.role;});
+  data.participants.forEach((p,i)=>{if(p.name==='주최자'||p.name===`친구 ${i}`)p.name=`친구 ${i+1}`;delete p.role;if(p.is_placeholder===undefined)p.is_placeholder=/^친구 [1-8]$/.test(p.name);});
   data.polls.forEach(p=>{delete p.status;delete p.deadline;delete p.confirmed_candidate_id;delete p.decision_reason;});
   for(const index of [1,20]){const row=data.schedule.find(s=>s.id===seed.schedule[index].id);if(row)Object.assign(row,{title:seed.schedule[index].title,description:seed.schedule[index].description,start_time:seed.schedule[index].start_time,verified:true});}
-  data.schema_version=2;return data;
+  delete data.me;delete data.invitations;data.schema_version=3;return data;
 }
 export class DemoRepository {
   constructor() {
     this.demo = true;
-    this.participantId = sessionStorage.getItem('namjjok-demo-person') || createSeed().participants[0].id;
     this.memory = null;
     this.onchange = () => {};
     this.listener = event => { if (event.key === DEMO_KEY) this.onchange(); };
@@ -27,18 +26,16 @@ export class DemoRepository {
     return this.memory || createSeed();
   }
   write(data) { this.memory = clone(data); try { localStorage.setItem(DEMO_KEY, JSON.stringify(data)); } catch { /* memory demo still usable */ } }
-  async snapshot() {
-    const data = this.read();
-    const me = data.participants.find(p => p.id === this.participantId && p.active);
-    if (!me) throw new Error('참여가 종료된 계정이에요. 다른 데모 참여자를 선택해 주세요.');
-    return { ...clone(data), me, server_time: new Date().toISOString(), invitations: data.invitations.map(({ token, ...rest }) => rest) };
-  }
-  async guestbook(limit = 20) { return clone(this.read().guestbook.filter(e => !e.deleted_at).sort((a,b) => b.created_at.localeCompare(a.created_at)).slice(0,limit)); }
-  async selectParticipant(id) { this.participantId = id; sessionStorage.setItem('namjjok-demo-person', id); }
+  async snapshot() { const data=clone(this.read());delete data.invitations;return {...data,me:null,server_time:new Date().toISOString()}; }
+  async guestbook(limit=20) { return clone(this.read().guestbook.filter(e=>!e.deleted_at).sort((a,b)=>b.created_at.localeCompare(a.created_at)).slice(0,limit)); }
   async mutate(action, payload) {
     const work = async () => {
-      const data = this.read(), me = data.participants.find(p => p.id === this.participantId && p.active);
-      if (!me) throw new Error('참여자 권한이 없어요.');
+      const data=clone(this.read()),nickname=validateNickname(payload.nickname);
+      const knownActions=['vote','candidate','guestbook_create','guestbook_edit','guestbook_delete','hide_candidate','schedule','schedule_add','lodging','participant','participant_add','expense_create','expense_edit','expense_delete'];
+      if(!knownActions.includes(action))throw new Error('지원하지 않는 작업이에요.');
+      let me=data.participants.find(p=>normalizeName(p.name)===normalizeName(nickname));
+      if(!me){me=data.participants.find(p=>p.is_placeholder);if(me){me.name=nickname;me.is_placeholder=false;}else{me={id:newId(),trip_id:TRIP_ID,name:nickname,active:true,is_placeholder:false};data.participants.push(me);}}
+      me.active=true;me.is_placeholder=false;
       const pollFor = () => { const p = data.polls.find(p => p.id === payload.poll_id); if (!p) throw new Error('투표를 찾을 수 없어요.'); return p; };
       const now = new Date().toISOString();
       let result = null;
@@ -58,11 +55,11 @@ export class DemoRepository {
         data.guestbook.push({ id:newId(), trip_id:TRIP_ID, participant_id:me.id, content, request_id:payload.request_id, created_at:now, updated_at:now, deleted_at:null });
       } else if (['guestbook_edit','guestbook_delete'].includes(action)) {
         const entry = data.guestbook.find(e => e.id === payload.id && !e.deleted_at);
-        if (!entry || entry.participant_id !== me.id) throw new Error('이 글을 변경할 권한이 없어요.');
+        if (!entry) throw new Error('이 글을 변경할 권한이 없어요.');
         if (action === 'guestbook_edit') { entry.content = validateMessage(payload.content); entry.updated_at = now; } else entry.deleted_at = now;
       } else if (action === 'hide_candidate') {
         const c = data.candidates.find(c => c.id === payload.id); if (!c) throw new Error('후보를 찾을 수 없어요.');
-        if(c.created_by!==me.id)throw new Error('직접 추천한 후보만 숨기거나 복원할 수 있어요.');c.hidden=Boolean(payload.hidden);
+        c.hidden=Boolean(payload.hidden);
       } else if (action === 'schedule') {
         const item = data.schedule.find(i => i.id === payload.id); if (!item) throw new Error('일정을 찾을 수 없어요.');
         if (!payload.title.trim() || payload.title.length>100) throw new Error('일정 제목은 1~100자예요.');
@@ -79,10 +76,10 @@ export class DemoRepository {
       } else if (action === 'participant') {
         const person = data.participants.find(p=>p.id===payload.id); if(!person) throw new Error('참여자를 찾을 수 없어요.');
         if (!payload.name.trim() || payload.name.length>40) throw new Error('이름은 1~40자예요.');
-        if(person.id!==me.id)throw new Error('본인의 이름만 변경할 수 있어요.');person.name=payload.name.trim();
+        const name=validateNickname(payload.name);if(data.participants.some(p=>p.id!==person.id&&normalizeName(p.name)===normalizeName(name)))throw new Error('이미 사용하는 닉네임이에요.');person.name=name;person.is_placeholder=false;
       } else if (action === 'participant_add') {
         if(!payload.name.trim() || payload.name.length>40) throw new Error('이름은 1~40자예요.');
-        data.participants.push({id:newId(),trip_id:TRIP_ID,name:payload.name.trim(),active:true});
+        const name=validateNickname(payload.name);if(!data.participants.some(p=>normalizeName(p.name)===normalizeName(name))){const slot=data.participants.find(p=>p.is_placeholder);if(slot){slot.name=name;slot.is_placeholder=false;}else data.participants.push({id:newId(),trip_id:TRIP_ID,name,active:true,is_placeholder:false});}
       } else if (['expense_create','expense_edit'].includes(action)) {
         if(action==='expense_create'&&data.expenses.some(x=>x.request_id===payload.request_id&&x.paid_by===me.id))return null;
         if(action==='expense_create'&&data.expenses.some(x=>x.request_id===payload.request_id))throw new Error('다른 결제 내역의 요청 식별자예요.');
@@ -90,7 +87,7 @@ export class DemoRepository {
         let expense;
         if(action==='expense_edit'){
           expense=data.expenses.find(x=>x.id===payload.id&&!x.deleted_at);
-          if(!expense||expense.paid_by!==me.id)throw new Error('본인의 결제 내역만 수정할 수 있어요.');
+          if(!expense)throw new Error('결제 내역을 찾을 수 없어요.');
         }else{
           if(!payload.request_id)throw new Error('요청 식별자가 필요해요.');
           expense={id:newId(),trip_id:TRIP_ID,paid_by:me.id,request_id:payload.request_id,created_at:now,deleted_at:null};data.expenses.push(expense);
@@ -100,22 +97,16 @@ export class DemoRepository {
         data.expense_splits.push(...allocate(input.amount,input.participant_ids).map(split=>({...split,id:newId(),trip_id:TRIP_ID,expense_id:expense.id})));
       } else if(action==='expense_delete'){
         const expense=data.expenses.find(x=>x.id===payload.id&&!x.deleted_at);
-        if(!expense||expense.paid_by!==me.id)throw new Error('본인의 결제 내역만 삭제할 수 있어요.');
+        if(!expense)throw new Error('결제 내역을 찾을 수 없어요.');
         expense.deleted_at=now;expense.updated_at=now;
-      } else if (action === 'invite') {
-        const person=data.participants.find(p=>p.id===payload.id && p.active); if(!person) throw new Error('활성 친구를 선택해 주세요.');
-        data.invitations.filter(i=>i.participant_id===person.id && !i.revoked_at).forEach(i=>i.revoked_at=now);
-        const token=newId().replaceAll('-','')+newId().replaceAll('-','');
-        data.invitations.push({id:newId(),participant_id:person.id,token,created_at:now,expires_at:payload.expires_at || null,revoked_at:null}); result={token};
-      } else if (action === 'revoke_invite') { data.invitations.filter(i=>i.participant_id===payload.id).forEach(i=>i.revoked_at=now); }
+      }
       else throw new Error('지원하지 않는 작업이에요.');
       this.write(data); this.onchange(); return result;
     };
     return navigator.locks ? navigator.locks.request('namjjok-demo-write', work) : work();
   }
-  async signOut() { await this.selectParticipant(createSeed().participants[0].id); }
   subscribe(callback) { this.onchange=callback; return ()=>{this.onchange=()=>{};window.removeEventListener('storage',this.listener);}; }
-  async reset() { this.write(createSeed()); await this.selectParticipant(createSeed().participants[0].id); }
+  async reset() { this.write(createSeed()); }
 }
 
 function loadSdk() {
@@ -126,22 +117,12 @@ export class SupabaseRepository {
   constructor(client,tripId) { this.client=client;this.tripId=tripId;this.demo=false;this.channel=null; }
   static async create(config) {
     await loadSdk();
-    return new SupabaseRepository(window.supabase.createClient(config.supabaseUrl,config.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}}),config.tripId);
+    return new SupabaseRepository(window.supabase.createClient(config.supabaseUrl,config.supabaseKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}}),config.tripId);
   }
-  async hasSession() { const {data,error}=await this.client.auth.getSession();if(error)throw error;return Boolean(data.session); }
-  async rpc(name,args) { const {data,error}=await this.client.rpc(name,args);if(error){const failure=new Error(error.code==='PGRST202'?'여행 데이터베이스가 아직 준비되지 않았어요. 최초 설정 후 다시 접속해 주세요.':error.message);failure.code=error.code;throw failure;}return data; }
-  async redeem(token) {
-    const {data,error}=await this.client.auth.getSession();if(error) throw error;
-    if(!data.session) {const response=await this.client.auth.signInAnonymously();if(response.error) throw new Error(response.error.code==='anonymous_provider_disabled'?'초대 링크 로그인을 아직 사용할 수 없어요. Supabase에서 익명 로그인을 켜 주세요.':response.error.message);}
-    const result=await this.rpc('redeem_invite',{p_token:token});
-    if(!result?.ok)throw new Error(result?.message || '유효하지 않은 초대 링크예요.');
-    if(result.trip_id!==this.tripId)throw new Error('다른 여행의 초대 링크예요.');
-    return result;
-  }
+  async rpc(name,args) { const {data,error}=await this.client.rpc(name,args);if(error){const failure=new Error(['PGRST202','42501'].includes(error.code)?'공유 데이터 설정이 필요해요. 기본 일정은 계속 볼 수 있어요.':error.message);failure.code=error.code;throw failure;}return data; }
   async snapshot() { return this.rpc('trip_snapshot',{p_trip:this.tripId}); }
   async guestbook(limit=20) { return this.rpc('trip_guestbook',{p_trip:this.tripId,p_limit:limit}); }
   async mutate(action,payload) { return this.rpc('trip_mutate',{p_trip:this.tripId,p_action:action,p_payload:payload}); }
-  async signOut() {if(this.channel){await this.client.removeChannel(this.channel);this.channel=null;}const {error}=await this.client.auth.signOut();if(error) throw error;}
   subscribe(callback,statusCallback) {
     if(this.channel) this.client.removeChannel(this.channel);
     this.channel=this.client.channel(`trip-${this.tripId}`);

@@ -1,24 +1,30 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync,writeFileSync } from 'node:fs';
 const root=new URL('../',import.meta.url);
-const files=['supabase/migrations/001_trip.sql','supabase/migrations/002_shared_expenses.sql','supabase/seed.sql'];
-const body=files.map(file=>`-- Source: ${file}\n${readFileSync(new URL(file,root),'utf8').replace(/^\s*(?:begin|commit);\s*$/gmi,'')}`).join('\n\n');
-const sql=`-- Generated: npm run build. ONLY for an empty project; use migrations for upgrades.
--- Paste this entire file into the Supabase SQL Editor and run once.
+const read=file=>readFileSync(new URL('supabase/'+file,root),'utf8').replace(/^\s*(?:begin|commit);\s*$/gmi,'');
+const sql=`-- Generated: npm run build. Run the WHOLE file in the project SQL Editor.
+-- Supports a new project and upgrades from v1/v2. Existing records and edits are retained.
 begin;
-do $$ begin
-  if to_regclass('public.trips') is not null then
-    raise exception 'Travel tables already exist. Apply only unapplied migrations; do not re-run setup.sql.';
+do $install_base$
+begin
+  if to_regclass('public.trips') is null then
+    execute $migration_001$${read('migrations/001_trip.sql')}$migration_001$;
   end if;
-end $$;
-${body}
+  if to_regclass('public.expenses') is null then
+    execute $migration_002$${read('migrations/002_shared_expenses.sql')}$migration_002$;
+  end if;
+end;
+$install_base$;
+${read('seed.sql')}
+do $install_nicknames$
+begin
+  if to_regprocedure('trip_private.require_trip(uuid)') is null then
+    execute $migration_003$${read('migrations/003_nickname_board.sql')}$migration_003$;
+  end if;
+end;
+$install_nicknames$;
 commit;
-
--- Copy each returned URL for that friend. Tokens are generated in the database.
-select p.name as friend,
-  'https://mumusyeo.github.io/yeosu/#invite=' || trip_private.bootstrap_invite(p.trip_id,p.id) as invite_url
-from public.participants p
-where p.trip_id='a0000000-0000-4000-8000-000000000001'::uuid and p.active
-order by p.id;
+select 'https://mumusyeo.github.io/yeosu/' as invitation_url,
+  'Ready: shared nickname board. No Auth configuration or personal links needed.' as status;
 `;
 writeFileSync(new URL('supabase/setup.sql',root),sql);
-console.log('Built supabase/setup.sql: atomic fresh installation and first friend links.');
+console.log('Built supabase/setup.sql: install/upgrade shared nickname board; no Auth setup.');

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/generate-seed.mjs && node scripts/build-preview.mjs && node scripts/build-setup.mjs",
+    "build": "node scripts/build-images.mjs && node scripts/generate-seed.mjs && node scripts/build-preview.mjs && node scripts/build-setup.mjs",
     "deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File ./Deploy.ps1",
     "build:preview": "node scripts/build-preview.mjs",
     "test": "node --test tests/*.test.mjs",

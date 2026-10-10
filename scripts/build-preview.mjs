@@ -11,6 +11,7 @@ let html=read('docs/index.html').replace(/\s*<script data-preview-redirect>.*?<\
   .replace(/<script src="\.\/config.js"><\/script>/,()=>`<script>${config}</script>`)
   .replace(/<script type="module" src="\.\/app.js"[^>]*><\/script>/,()=>`<script defer>document.addEventListener('DOMContentLoaded',()=>{${result.outputFiles[0].text.replace(/<\/script/gi,'<\\/script')}\n});</script>`)
   .replaceAll('./assets/landscape.svg',svg);
+for(const file of ['main_img.jpg','main_img2.jpg'])html=html.replaceAll('./assets/'+file,'data:image/jpeg;base64,'+readFileSync(new URL('docs/assets/'+file,root)).toString('base64'));
 writeFileSync(new URL('preview.html',root),html);
 writeFileSync(new URL('docs/demo.html',root),html);
 console.log('Built preview.html and docs/demo.html: standalone local demo.');

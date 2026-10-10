@@ -76,7 +76,7 @@ def main():
     if server.server_port != args.port:
         print(f'Port {args.port} is occupied. Using {server.server_port}; existing processes are unchanged.', flush=True)
     print(f'OPEN THIS ADDRESS: {url}', flush=True)
-    print('Mode: ' + ('shared Supabase (requires one-time setup and a friend invite)' if args.live else 'local demo; stored in this browser only'), flush=True)
+    print('Mode: ' + ('shared Supabase (requires one-time database setup; no login)' if args.live else 'local demo; stored in this browser only'), flush=True)
     print('Stop with Ctrl+C.', flush=True)
     if not args.no_browser:
         webbrowser.open(url)

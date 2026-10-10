@@ -4,6 +4,11 @@ export function safeUrl(value) {
   try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) ? url.href : ''; } catch { return ''; }
 }
 export const normalizeName = name => name.trim().replace(/\s+/gu, ' ').toLocaleLowerCase('ko');
+export function validateNickname(value) {
+  const nickname=String(value||'').trim().replace(/\s+/gu,' ');
+  if(!nickname||Array.from(nickname).length>40)throw new Error('닉네임은 1~40자로 입력해 주세요.');
+  return nickname;
+}
 // Voting never closes. Old stored deadlines/confirmation flags have no effect.
 export function pollResult(poll, candidates, votes) {
   const ranked = candidates.filter(c => c.poll_id === poll.id && !c.hidden).map(c => ({ ...c, count: votes.filter(v => v.poll_id === poll.id && v.candidate_id === c.id).length })).sort((a, b) => b.count - a.count || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
