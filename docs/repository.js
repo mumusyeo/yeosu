@@ -34,12 +34,14 @@ export class DemoRepository {
   async guestbook(limit=20) { return clone(this.read().guestbook.filter(e=>!e.deleted_at).sort((a,b)=>b.created_at.localeCompare(a.created_at)).slice(0,limit)); }
   async mutate(action, payload) {
     const work = async () => {
-      const data=clone(this.read()),nickname=validateNickname(payload.nickname);
+      const data=clone(this.read()),anonymous=['schedule','schedule_add','lodging'].includes(action),nickname=anonymous?'':validateNickname(payload.nickname);
       const knownActions=['vote','candidate','guestbook_create','guestbook_edit','guestbook_delete','hide_candidate','schedule','schedule_add','lodging','participant','participant_add','expense_create','expense_edit','expense_delete'];
       if(!knownActions.includes(action))throw new Error('지원하지 않는 작업이에요.');
       let me=data.participants.find(p=>normalizeName(p.name)===normalizeName(nickname));
-      if(!me){me=data.participants.find(p=>p.is_placeholder);if(me){me.name=nickname;me.is_placeholder=false;}else{me={id:newId(),trip_id:TRIP_ID,name:nickname,active:true,is_placeholder:false};data.participants.push(me);}}
-      me.active=true;me.is_placeholder=false;
+      if(!anonymous){
+        if(!me){me=data.participants.find(p=>p.is_placeholder);if(me){me.name=nickname;me.is_placeholder=false;}else{me={id:newId(),trip_id:TRIP_ID,name:nickname,active:true,is_placeholder:false};data.participants.push(me);}}
+        me.active=true;me.is_placeholder=false;
+      }
       const pollFor = () => { const p = data.polls.find(p => p.id === payload.poll_id); if (!p) throw new Error('투표를 찾을 수 없어요.'); return p; };
       const now = new Date().toISOString();
       let result = null;

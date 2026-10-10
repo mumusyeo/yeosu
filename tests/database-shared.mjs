@@ -101,6 +101,15 @@ await check('optional accounts persist with chronological ordering, edits, legac
   await assert.rejects(()=>mutate('expense_edit',{...edit,account_number:'x'.repeat(101)}),/100자/);assert.equal((await snap()).expenses[0].account_number,'새 은행 004-56');
   await mutate('expense_edit',{...edit,account_number:''});assert.equal((await snap()).expenses[0].account_number,'');await db.exec('reset role');await db.exec(read('migrations/005_expense_accounts.sql'));assert.equal((await snap()).expenses.length,2);
 });
+for(const file of ['006_expense_banks','007_lodging_details','008_anonymous_trip_edits'])await db.exec(read(`migrations/${file}.sql`));
+await check('schedule and lodging edits need no nickname and add no participant; other actions still require one',async()=>{
+  await role('anon');const before=(await snap()).participants.map(p=>p.name);
+  await mutate('schedule',{id:seed.schedule[3].id,date:'2026-11-06',title:'닉네임 없는 수정',position:4});
+  await mutate('schedule_add',{nickname:'지나가던 사람',date:'2026-11-07',title:'새 일정',kind:'sight'});
+  await mutate('lodging',{id:seed.lodgings[1].id,name:'온녘',url:seed.lodgings[1].url});
+  const data=await snap();assert.equal(data.schedule.find(s=>s.id===seed.schedule[3].id).title,'닉네임 없는 수정');assert(data.schedule.some(s=>s.title==='새 일정'));assert.deepEqual(data.participants.map(p=>p.name),before);
+  await assert.rejects(()=>mutate('vote',{poll_id:poll.id,candidate_id:a.id}),/닉네임/);await assert.rejects(()=>mutate('expense_delete',{id:data.expenses[0].id}),/닉네임/);
+});
 await db.close();
 await check('setup creates the common URL without tokens and safely repeats without overwriting edits',async()=>{
   const fresh=new PGlite();await fresh.exec(authStub);const setup=read('setup.sql'),results=await fresh.exec(setup);

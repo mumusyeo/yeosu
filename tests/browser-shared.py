@@ -80,7 +80,7 @@ try:
         b.locator('#dialog').get_by_role('button',name='저장하기',exact=True).click()
         expect(a.locator('.guest-message')).to_have_text('누구나 함께 수정')
         a.get_by_role('link',name='여행 일정',exact=True).click();a.locator('[data-action="schedule-edit"]').first.click()
-        a.locator('#dialog [name="nickname"]').fill('밀로');a.get_by_label('제목',exact=True).fill('용산 → 여수EXPO · 함께 출발')
+        assert a.locator('#dialog [name="nickname"]').count()==0 and a.locator('#identity').count()==0;a.get_by_label('제목',exact=True).fill('용산 → 여수EXPO · 함께 출발')
         a.locator('#dialog').get_by_role('button',name='저장하기',exact=True).click()
         for width in [320,360,390,768,1024,1440]:
             a.set_viewport_size({'width':width,'height':900})

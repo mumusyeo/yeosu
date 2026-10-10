@@ -9,6 +9,8 @@ const dates = ['2026-11-06','2026-11-07','2026-11-08'];
 const days = ['여수, 바다를 만나는 날','여수에서 순천, 가을을 따라서','순천, 느긋한 마지막 하루'];
 const kindNames = {train:'TRAIN · 기차',move:'ON THE ROAD · 이동',food:'GOOD FOOD · 식사',cafe:'COFFEE BREAK · 카페',sight:'SLOW WALK · 관광',stay:'STAY · 숙소'};
 const state = {repo:null,data:null,publicPreview:false,entries:[],section:'schedule',date:dates[0],pollId:null,limit:20,loading:true,error:'',busy:false,guestDraft:'',guestNicknameDraft:null,requestId:newId(),unsubscribe:null,refreshing:false,refreshAgain:false,clockOffset:0,realtime:''};
+// Trip details are shared edits, so these forms do not ask who is editing.
+const anonymousForms = ['schedule-edit','schedule-add','lodging'];
 let toastTimer,refreshTimer,expiryTimer,lastNickname='';
 try{lastNickname=localStorage.getItem('namjjok-nickname')||'';}catch{}
 if(new URLSearchParams(location.hash.slice(1)).has('invite'))history.replaceState(null,'',location.pathname+location.search+'#schedule');
@@ -49,7 +51,6 @@ function renderConnection() {
   el.className='connection'+(state.repo?.demo?' demo':'');
   el.innerHTML=state.repo?.demo?'<strong>로컬 데모</strong> <span>이 브라우저에만 저장돼요. 등록할 때 닉네임을 입력해 주세요.</span>':state.publicPreview?`<strong>기본 일정 보기</strong> <span>${e(state.error||'공유 기능을 연결하고 있어요.')}</span>`:state.error?`<strong>연결 확인 중</strong> <span>${e(state.error)}</span>`:!navigator.onLine?'<strong>오프라인</strong> <span>다시 연결되면 저장할 수 있어요.</span>':'';
   el.hidden=!el.textContent.trim();
-  $('#identity').innerHTML=lastNickname?`<span class="avatar" aria-hidden="true">${e(lastNickname.slice(0,1))}</span><span>${e(lastNickname)}</span>`:'';
 }
 function renderNav() {
   const tabs=[['schedule','여행 일정'],['votes','맛집 투표'],['lodgings','숙소'],['budget','예산 · 정산'],['guestbook','방명록']];
@@ -112,7 +113,7 @@ function expenseForm(expense=null) {
 }
 
 function showDialog(title,body) {$('#dialog-content').innerHTML=`<div class="dialog-heading"><h2>${e(title)}</h2>${button('×','dialog-close','','quiet')}</div>${body}`;if(!$('#dialog').open)$('#dialog').showModal();}
-function showForm(title,form,body,id='',submit='저장하기') {showDialog(title,`<form data-form="${form}" data-id="${e(id)}">${nicknameField()}${body}${formEnd(submit)}</form>`);}
+function showForm(title,form,body,id='',submit='저장하기') {showDialog(title,`<form data-form="${form}" data-id="${e(id)}">${anonymousForms.includes(form)?'':nicknameField()}${body}${formEnd(submit)}</form>`);}
 function confirmAction(title,message,action,id,extra={}) {showDialog(title,`<p class="dialog-description">${e(message)}</p><form data-form="confirmation" data-id="${e(id)}" data-action-name="${action}" data-extra="${e(JSON.stringify(extra))}">${nicknameField()}${formEnd('확인')}</form>`);}
 function scheduleForm(item) {showForm('일정 수정','schedule-edit',field('제목','title',item.title,'text','required maxlength="100"')+dateField(item.date)+`<div class="form-row">${field('시작 시간','start_time',item.start_time?.slice(0,5)||'','time')}${field('종료 시간','end_time',item.end_time?.slice(0,5)||'','time')}</div>`+field('일정 표시 순서','position',item.position,'number','min="1" max="9999" required')+textarea('설명','description',item.description,1000)+check('확인된 일정으로 표시','verified',item.verified),item.id);}
 function navigate(section) {state.section=section;state.pollId=null;if(location.hash!==`#${section}`)location.hash=section;else render();}
@@ -140,6 +141,7 @@ function subscribe() {
 async function write(action,payload) {
   if(!canEdit())throw new Error('닉네임을 입력해 주세요.');
   if(!navigator.onLine&&!state.repo.demo)throw new Error('오프라인이에요. 연결 후 저장해 주세요.');
+  if(payload.nickname===undefined){const result=await state.repo.mutate(action,payload);await refresh();return result;}
   const nickname=validateNickname(payload.nickname);const result=await state.repo.mutate(action,{...payload,nickname});rememberNickname(nickname);await refresh();return result;
 }
 async function action(name,id,element) {
@@ -182,7 +184,7 @@ document.addEventListener('submit',async event=>{
   const values=Object.fromEntries(new FormData(form)),id=form.dataset.id,type=form.dataset.form;
   try{
     if(!canEdit())throw new Error('닉네임을 입력해 주세요.');
-    const nickname=validateNickname(values.nickname);
+    const nickname=anonymousForms.includes(type)?undefined:validateNickname(values.nickname);
     const register=(action,payload)=>write(action,{...payload,nickname});
     let result;
     if(type==='vote'){const c=state.data.candidates.find(c=>c.id===id),person=state.data.participants.find(p=>normalizeName(p.name)===normalizeName(nickname)),old=state.data.votes.find(v=>v.poll_id===c.poll_id&&v.participant_id===person?.id);await register('vote',{poll_id:c.poll_id,candidate_id:old?.candidate_id===id?null:id});}
@@ -198,7 +200,7 @@ document.addEventListener('submit',async event=>{
     else if(type==='guest-edit')await register('guestbook_edit',{id,content:validateMessage(values.content)});
     else if(type==='reset'){await state.repo.reset();state.section='schedule';await refresh();}
     $('#dialog').close();toast(state.repo.demo?'데모에 저장했어요.':'저장했어요.');
-  }catch(error){if(form.isConnected)form.querySelector('.form-error').textContent=error.message;else toast(error.message);}
+  }catch(error){if(anonymousForms.includes(type)&&/닉네임/.test(error.message))error.message='닉네임 없이 저장하려면 공유 데이터 업데이트가 필요해요. 최신 setup.sql 적용 후 다시 시도해 주세요.';if(form.isConnected)form.querySelector('.form-error').textContent=error.message;else toast(error.message);}
   finally{lockUi(false);}
 });
 document.addEventListener('input',event=>{if(event.target.id==='guest-content')state.guestDraft=event.target.value;if(event.target.name==='nickname'&&event.target.closest('.guest-form'))state.guestNicknameDraft=event.target.value;});
