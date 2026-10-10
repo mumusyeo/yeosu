@@ -142,7 +142,7 @@ try {
     while ([DateTime]::UtcNow -lt $deadline) {
         try {
             $runs = Invoke-GitHub "/actions/workflows/pages.yml/runs?head_sha=$sha&per_page=10"
-            $run = $runs.workflow_runs | Where-Object { [DateTime]$_.created_at -ge $startedAt } | Sort-Object id -Descending | Select-Object -First 1
+            $run = $runs.workflow_runs | Where-Object { ([DateTimeOffset]$_.created_at).UtcDateTime -ge $startedAt } | Sort-Object id -Descending | Select-Object -First 1
         } catch {
             if ([int]$_.Exception.Response.StatusCode -ne 404) { throw }
         }
